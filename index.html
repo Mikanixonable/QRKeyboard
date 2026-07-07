@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>QRコードジェネレーター</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='white'/><path fill='black' d='M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z'/></svg>">
+</head>
+<body>
+  <header class="app-header">
+    <h1>QRコードジェネレーター</h1>
+    <nav class="tabs" role="tablist" aria-label="コード規格">
+      <button class="tab" role="tab" data-standard="qr" aria-selected="true">QR</button>
+      <button class="tab" role="tab" data-standard="micro" aria-selected="false">マイクロQR</button>
+      <button class="tab" role="tab" data-standard="rmqr" aria-selected="false">rMQR</button>
+      <button class="tab" role="tab" data-standard="iqr" aria-selected="false">iQR</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="controls" id="controls">
+      <div class="field">
+        <label for="data-input">データ</label>
+        <textarea id="data-input" rows="3" spellcheck="false"
+          placeholder="エンコードする文字列を入力">https://www.qrcode.com/</textarea>
+      </div>
+
+      <div class="field">
+        <label id="ec-label">誤り訂正レベル</label>
+        <div class="segmented" id="ec-control" role="radiogroup" aria-labelledby="ec-label"></div>
+      </div>
+
+      <div class="field">
+        <label id="version-label" for="version-control">複雑度(型番)</label>
+        <div class="version-row" id="version-control"></div>
+      </div>
+
+      <div class="field" id="mask-field">
+        <label id="mask-label">マスクパターン</label>
+        <div class="segmented" id="mask-control" role="radiogroup" aria-labelledby="mask-label"></div>
+      </div>
+    </section>
+
+    <section class="preview">
+      <div class="qr-card" id="qr-card">
+        <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>
+        <p class="qr-message" id="qr-message" hidden></p>
+      </div>
+      <dl class="info" id="info"></dl>
+    </section>
+
+    <section class="iqr-notice" id="iqr-notice" hidden>
+      <h2>iQRコードについて</h2>
+      <p>
+        iQRコードは株式会社デンソーウェーブの独自仕様
+        (SPQR-0004)で、仕様書が一般公開されておらず、
+        ISO/IEC による国際規格化もされていません。
+        生成・読み取りともに同社の公式製品でのみ対応可能なため、
+        規格に準拠した実装ができず、本ツールでは生成に対応していません。
+      </p>
+      <p>
+        長方形のコードが必要な場合は、iQR の長方形用途を引き継いで
+        ISO/IEC 23941 として規格化された
+        <button class="link-button" id="goto-rmqr">rMQRコード</button>
+        をご利用ください。
+      </p>
+    </section>
+  </main>
+
+  <script src="qrcode.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
