@@ -1,5 +1,5 @@
 /* ============================================================
- * QRコードジェネレーター
+ * コードジェネレーター
  * 1画面完結・スクロールなし (PC / モバイル対応)
  * ========================================================== */
 :root {
@@ -8,8 +8,10 @@
   --text: #1a1c1f;
   --text-sub: #5f6672;
   --border: #d9dde3;
-  --accent: #1a56c4;
+  --accent: #1a56c4;        /* QR 系 */
   --accent-weak: #e3ecfb;
+  --accent2: #0e7a5f;       /* 非 QR 系 */
+  --accent2-weak: #dcf2ec;
   --danger: #b3261e;
   --radius: 10px;
 }
@@ -22,6 +24,8 @@
     --border: #3a3f47;
     --accent: #6ea1f0;
     --accent-weak: #263650;
+    --accent2: #4fc3a1;
+    --accent2-weak: #1d3a32;
     --danger: #f2827b;
   }
 }
@@ -54,19 +58,24 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 8px 12px;
   flex-wrap: wrap;
-  padding: 10px 16px 8px;
+  padding: 8px 16px 8px;
 }
 .app-header h1 {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tab-group {
+  display: flex;
+  gap: 3px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -77,18 +86,18 @@ body {
   background: transparent;
   color: var(--text-sub);
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 4px 14px;
+  padding: 3px 12px;
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
 }
-.tab[aria-selected="true"] {
-  background: var(--accent);
-  color: #fff;
-}
 .tab:hover:not([aria-selected="true"]) { color: var(--text); }
+.tab-group-qr .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
+/* 非QR系は色を変えて分離 */
+.tab-group-other { border-color: var(--accent2); }
+.tab-group-other .tab[aria-selected="true"] { background: var(--accent2); color: #fff; }
 
 /* ---------- レイアウト ---------- */
 .layout {
@@ -96,17 +105,17 @@ body {
   min-height: 0;
   display: flex;
   gap: 12px;
-  padding: 0 16px 14px;
+  padding: 0 16px 12px;
 }
 .controls {
   flex: 0 0 320px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 12px 14px;
   overflow-y: auto; /* 極小画面での保険。通常はスクロール不要 */
 }
 .preview {
@@ -115,13 +124,13 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* ---------- 入力コントロール ---------- */
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field > label {
-  font-size: 12px;
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > label, .field > .field-label {
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-sub);
   letter-spacing: 0.04em;
@@ -135,9 +144,10 @@ textarea {
   background: var(--bg);
   color: var(--text);
   font: inherit;
-  padding: 8px 10px;
+  padding: 7px 10px;
 }
-textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
+textarea:focus, select:focus, input:focus-visible,
+.seg-btn:focus-visible, .tab:focus-visible, .small-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -153,8 +163,8 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
   color: var(--text);
   font: inherit;
   font-size: 12.5px;
-  padding: 4px 0;
-  min-width: 44px;
+  padding: 3px 0;
+  min-width: 42px;
   flex: 1 0 auto;
   border-radius: 7px;
   cursor: pointer;
@@ -165,12 +175,14 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
   color: var(--accent);
   font-weight: 700;
 }
-.seg-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.other-standard .seg-btn[aria-checked="true"] {
+  background: var(--accent2-weak);
+  border-color: var(--accent2);
+  color: var(--accent2);
 }
+.seg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .seg-note {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-sub);
 }
 
@@ -179,18 +191,23 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
 .mask-grid .seg-btn { min-width: 0; }
 .mask-grid .seg-btn:first-child { grid-column: 1 / -1; }
 
-.version-row {
+.version-box {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 28px;
+}
+.version-line {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
 }
-.version-row input[type="range"] {
+.version-line input[type="range"] {
   flex: 1;
   accent-color: var(--accent);
   min-width: 0;
 }
-.version-row select {
+.version-line select {
   flex: 1;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -198,40 +215,100 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
   color: var(--text);
   font: inherit;
   font-size: 13px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   min-width: 0;
 }
+.version-line .segmented {
+  flex: 1;
+  flex-wrap: nowrap;
+}
+.version-line .segmented .seg-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 2px;
+  padding-right: 2px;
+}
 .version-value {
-  min-width: 3.5em;
+  min-width: 3.4em;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: 12.5px;
+}
+.dim-label {
+  font-size: 11px;
+  color: var(--text-sub);
+  min-width: 2.4em;
 }
 .auto-toggle {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 12.5px;
-  color: var(--text);
   white-space: nowrap;
   cursor: pointer;
 }
 .auto-toggle input { accent-color: var(--accent); }
 
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.color-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+.color-item input[type="color"] {
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+
+.small-button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.small-button:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ---------- プレビュー ---------- */
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.edit-hint { font-size: 11px; color: var(--text-sub); }
+.toolbar-spacer { flex: 1; }
+
 .qr-card {
   flex: 1;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff; /* コードの背景は常に白 (明モジュール) */
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
 #qr-canvas { display: block; }
+#qr-canvas.editable { cursor: crosshair; }
 .qr-message {
   color: var(--danger);
   font-weight: 600;
@@ -239,22 +316,58 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
   padding: 0 20px;
 }
 
-.info {
+.content-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
+  align-items: baseline;
+  gap: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 14px;
+  padding: 5px 14px;
   font-size: 12.5px;
+  min-width: 0;
+}
+.content-label {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.04em;
+}
+.content-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.content-text.unreadable { color: var(--danger); }
+.content-status {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+.content-status.corrected { color: var(--accent2); font-weight: 700; }
+.content-status.error { color: var(--danger); font-weight: 700; }
+
+.info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 14px;
+  font-size: 12px;
 }
 .info > div { display: flex; gap: 6px; white-space: nowrap; }
 .info dt { color: var(--text-sub); }
 .info dd { font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* ---------- iQR 案内 ---------- */
-.iqr-notice {
+/* ---------- Vericode 案内 ---------- */
+.notice {
   flex: 1;
   align-self: center;
   max-width: 560px;
@@ -262,15 +375,15 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 24px 28px;
+  padding: 22px 26px;
 }
-.iqr-notice h2 { font-size: 15px; margin-bottom: 10px; }
-.iqr-notice p { color: var(--text-sub); font-size: 13.5px; }
-.iqr-notice p + p { margin-top: 10px; }
+.notice h2 { font-size: 15px; margin-bottom: 10px; }
+.notice p { color: var(--text-sub); font-size: 13px; }
+.notice p + p { margin-top: 10px; }
 .link-button {
   border: none;
   background: none;
-  color: var(--accent);
+  color: var(--accent2);
   font: inherit;
   font-weight: 700;
   text-decoration: underline;
@@ -279,33 +392,34 @@ textarea:focus, select:focus, .seg-btn:focus-visible, .tab:focus-visible {
 }
 
 /* ---------- モバイル ---------- */
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   body { font-size: 13px; }
-  .app-header { padding: 8px 10px 6px; }
-  .app-header h1 { font-size: 14px; }
-  .tab { padding: 3px 10px; font-size: 12px; }
+  .app-header { padding: 6px 10px 4px; gap: 4px 8px; }
+  .app-header h1 { font-size: 13px; }
+  .tab { padding: 2px 8px; font-size: 11.5px; }
   .layout {
     flex-direction: column;
-    gap: 8px;
-    padding: 0 10px 10px;
+    gap: 6px;
+    padding: 0 10px 8px;
   }
   .controls {
     flex: 0 0 auto;
-    padding: 10px;
-    gap: 8px;
+    padding: 8px 10px;
+    gap: 7px;
     overflow-y: visible;
   }
-  textarea { padding: 6px 8px; }
-  #data-input { height: 3.2em; }
-  .seg-btn { min-width: 38px; padding: 3px 0; }
-  .preview { flex: 1; min-height: 120px; }
-  .info { padding: 6px 10px; gap: 2px 14px; font-size: 11.5px; }
-  .iqr-notice { padding: 18px 16px; margin: 0 auto; }
+  textarea { padding: 5px 8px; }
+  #data-input { height: 2.8em; }
+  .seg-btn { min-width: 36px; padding: 2px 0; font-size: 12px; }
+  .preview { flex: 1; min-height: 100px; gap: 4px; }
+  .info { padding: 4px 10px; gap: 1px 12px; font-size: 11px; }
+  .content-bar { padding: 4px 10px; font-size: 11.5px; }
+  .notice { padding: 16px 14px; margin: 0 auto; }
 }
 
 /* 高さの低い横向きモバイルなど */
 @media (max-height: 460px) {
-  .app-header { padding: 6px 12px 4px; }
-  .controls { gap: 6px; padding: 8px 12px; }
-  #data-input { height: 2.4em; }
+  .app-header { padding: 4px 12px 2px; }
+  .controls { gap: 5px; padding: 6px 12px; }
+  #data-input { height: 2.2em; }
 }

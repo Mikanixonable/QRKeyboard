@@ -1006,6 +1006,443 @@
   }
 
   /* ========================================================================
+   * 復号 (編集プレビュー用)
+   * RS 誤り訂正復号は Berlekamp-Massey + Chien 探索 + Forney 法。
+   * フォーマット情報は有効ビット列との最小ハミング距離で復元する。
+   * ====================================================================== */
+
+  function hamming15(a, b) {
+    let x = (a ^ b) & 0x7fff, n = 0;
+    while (x) { n += x & 1; x >>= 1; }
+    return n;
+  }
+
+  /* GF(256, 0x11D) 上の RS 復号。cw を訂正し訂正シンボル数を返す。不能なら -1。
+   * 生成多項式の根は α^0 .. α^(eccLen-1) (QR 系の規約)。 */
+  function rsCorrect(cw, eccLen) {
+    const n = cw.length;
+    // シンドローム S_i = C(α^i)
+    const synd = new Array(eccLen).fill(0);
+    let hasError = false;
+    for (let i = 0; i < eccLen; i++) {
+      let s = 0;
+      for (let j = 0; j < n; j++) {
+        // s = s*α^i + cw[j]
+        s = cw[j] ^ (s === 0 ? 0 : GF_EXP[(GF_LOG[s] + i) % 255]);
+      }
+      synd[i] = s;
+      if (s !== 0) hasError = true;
+    }
+    if (!hasError) return 0;
+
+    // Berlekamp-Massey で誤り位置多項式 sigma を求める (係数は低次から)
+    let sigma = [1];
+    let prev = [1];
+    let L = 0, m = 1, b = 1;
+    for (let i = 0; i < eccLen; i++) {
+      let delta = synd[i];
+      for (let j = 1; j <= L; j++) {
+        if (sigma[j] !== 0 && synd[i - j] !== 0) {
+          delta ^= GF_EXP[(GF_LOG[sigma[j]] + GF_LOG[synd[i - j]]) % 255];
+        }
+      }
+      if (delta === 0) {
+        m++;
+      } else if (2 * L <= i) {
+        const tmp = sigma.slice();
+        const coef = GF_EXP[(GF_LOG[delta] - GF_LOG[b] + 255) % 255];
+        const shifted = new Array(prev.length + m).fill(0);
+        for (let j = 0; j < prev.length; j++) {
+          if (prev[j] !== 0) shifted[j + m] = GF_EXP[(GF_LOG[prev[j]] + GF_LOG[coef]) % 255];
+        }
+        while (sigma.length < shifted.length) sigma.push(0);
+        for (let j = 0; j < shifted.length; j++) sigma[j] ^= shifted[j];
+        L = i + 1 - L;
+        prev = tmp;
+        b = delta;
+        m = 1;
+      } else {
+        const coef = GF_EXP[(GF_LOG[delta] - GF_LOG[b] + 255) % 255];
+        const shifted = new Array(prev.length + m).fill(0);
+        for (let j = 0; j < prev.length; j++) {
+          if (prev[j] !== 0) shifted[j + m] = GF_EXP[(GF_LOG[prev[j]] + GF_LOG[coef]) % 255];
+        }
+        while (sigma.length < shifted.length) sigma.push(0);
+        for (let j = 0; j < shifted.length; j++) sigma[j] ^= shifted[j];
+        m++;
+      }
+    }
+    while (sigma.length > 1 && sigma[sigma.length - 1] === 0) sigma.pop();
+    const numErrors = sigma.length - 1;
+    if (numErrors === 0 || numErrors > Math.floor(eccLen / 2)) return -1;
+
+    // Chien 探索: sigma(α^-pos)=0 となる誤り位置を探す
+    const errPos = []; // codeword index (0 = 先頭)
+    for (let j = 0; j < n; j++) {
+      const xinvLog = (255 - ((n - 1 - j) % 255)) % 255; // α^-(n-1-j)
+      let v = 0;
+      for (let k = 0; k < sigma.length; k++) {
+        if (sigma[k] !== 0) v ^= GF_EXP[(GF_LOG[sigma[k]] + k * xinvLog) % 255];
+      }
+      if (v === 0) errPos.push(j);
+    }
+    if (errPos.length !== numErrors) return -1;
+
+    // Forney 法: omega = (synd(x) * sigma(x)) mod x^eccLen
+    const omega = new Array(eccLen).fill(0);
+    for (let i = 0; i < eccLen; i++) {
+      for (let k = 0; k <= Math.min(i, sigma.length - 1); k++) {
+        if (sigma[k] !== 0 && synd[i - k] !== 0) {
+          omega[i] ^= GF_EXP[(GF_LOG[sigma[k]] + GF_LOG[synd[i - k]]) % 255];
+        }
+      }
+    }
+    for (const j of errPos) {
+      const xLog = (n - 1 - j) % 255;         // X = α^(n-1-j)
+      const xinvLog = (255 - xLog) % 255;
+      let om = 0;
+      for (let k = 0; k < eccLen; k++) {
+        if (omega[k] !== 0) om ^= GF_EXP[(GF_LOG[omega[k]] + k * xinvLog) % 255];
+      }
+      let sp = 0; // sigma の形式的微分を X^-1 で評価 (奇数次のみ)
+      for (let k = 1; k < sigma.length; k += 2) {
+        if (sigma[k] !== 0) sp ^= GF_EXP[(GF_LOG[sigma[k]] + (k - 1) * xinvLog) % 255];
+      }
+      if (sp === 0) return -1;
+      if (om !== 0) {
+        // b=0 のため e = X * omega(X^-1) / sigma'(X^-1)
+        const mag = GF_EXP[(GF_LOG[om] - GF_LOG[sp] + xLog + 255 * 2) % 255];
+        cw[j] ^= mag;
+      }
+    }
+    // 訂正後シンドローム確認
+    for (let i = 0; i < eccLen; i++) {
+      let s = 0;
+      for (let j = 0; j < n; j++) {
+        s = cw[j] ^ (s === 0 ? 0 : GF_EXP[(GF_LOG[s] + i) % 255]);
+      }
+      if (s !== 0) return -1;
+    }
+    return numErrors;
+  }
+
+  class QRDecodeError extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "QRDecodeError";
+    }
+  }
+
+  /* 配置順にデータ領域のビットを読み出す (placeData と同一の走査) */
+  function readPlacedBits(M, skipCol6, startRight) {
+    const bits = [];
+    let pairIdx = 0;
+    for (let right = startRight; right >= 1; right -= 2) {
+      if (skipCol6 && right === 6) right = 5;
+      const upward = pairIdx % 2 === 0;
+      for (let v = 0; v < M.height; v++) {
+        const y = upward ? M.height - 1 - v : v;
+        for (let dx = 0; dx < 2; dx++) {
+          const x = right - dx;
+          if (!M.isFunc(x, y)) bits.push(M.get(x, y));
+        }
+      }
+      pairIdx++;
+    }
+    return bits;
+  }
+
+  /* ブロック分割の逆変換: 交互配置されたコード語 → ブロックごとの配列 */
+  function deinterleave(allCw, totalCw, dataCw, numBlocks) {
+    const eccPerBlock = (totalCw - dataCw) / numBlocks;
+    const shortLen = Math.floor(dataCw / numBlocks);
+    const longBlocks = dataCw % numBlocks;
+    const shortBlocks = numBlocks - longBlocks;
+    const lens = [];
+    for (let b = 0; b < numBlocks; b++) lens.push(b < shortBlocks ? shortLen : shortLen + 1);
+    const maxLen = shortLen + (longBlocks > 0 ? 1 : 0);
+
+    const blocks = lens.map((len) => new Uint8Array(len + eccPerBlock));
+    let idx = 0;
+    for (let i = 0; i < maxLen; i++) {
+      for (let b = 0; b < numBlocks; b++) {
+        if (i < lens[b]) blocks[b][i] = allCw[idx++];
+      }
+    }
+    for (let i = 0; i < eccPerBlock; i++) {
+      for (let b = 0; b < numBlocks; b++) {
+        blocks[b][lens[b] + i] = allCw[idx++];
+      }
+    }
+    return { blocks, lens, eccPerBlock };
+  }
+
+  /* ビット配列から数値を読む */
+  function takeBits(bits, pos, count) {
+    let v = 0;
+    for (let i = 0; i < count; i++) v = (v << 1) | bits[pos + i];
+    return v;
+  }
+
+  /* データビット列 → テキスト (QR/マイクロQR/rMQR 共通) */
+  function parseBitStream(bits, standard, version) {
+    let pos = 0;
+    let out = "";
+    const bytes = [];
+    const flushBytes = () => {
+      if (bytes.length) {
+        out += new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+        bytes.length = 0;
+      }
+    };
+    const modeBitsLen = standard === "qr" ? 4 : standard === "rmqr" ? 3 : version - 1;
+
+    while (pos + modeBitsLen <= bits.length) {
+      let mode;
+      if (standard === "micro" && version === 1) {
+        mode = "numeric";
+      } else {
+        const mv = takeBits(bits, pos, modeBitsLen);
+        pos += modeBitsLen;
+        if (mv === 0 && standard !== "micro") break; // 終端パターン
+        if (standard === "qr") {
+          mode = { 1: "numeric", 2: "alphanumeric", 4: "byte", 8: "kanji" }[mv];
+        } else if (standard === "rmqr") {
+          mode = { 1: "numeric", 2: "alphanumeric", 3: "byte", 4: "kanji" }[mv];
+        } else {
+          mode = ["numeric", "alphanumeric", "byte", "kanji"][mv];
+        }
+        if (!mode) throw new QRDecodeError("未対応のモード指示子です");
+      }
+
+      if (mode === "kanji") throw new QRDecodeError("漢字モードは未対応です");
+      let cci;
+      if (standard === "qr") cci = qrCciBits(version, mode);
+      else if (standard === "rmqr") cci = RMQR_CCI[mode][version - 1];
+      else cci = MICRO_CCI[mode][version - 1];
+      if (!cci || pos + cci > bits.length) break;
+      const count = takeBits(bits, pos, cci);
+      pos += cci;
+      if (count === 0) break; // 終端 (0 詰め)
+
+      if (mode === "numeric") {
+        flushBytes();
+        let left = count;
+        while (left >= 3) {
+          out += String(takeBits(bits, pos, 10)).padStart(3, "0");
+          pos += 10; left -= 3;
+        }
+        if (left === 2) { out += String(takeBits(bits, pos, 7)).padStart(2, "0"); pos += 7; }
+        else if (left === 1) { out += String(takeBits(bits, pos, 4)); pos += 4; }
+      } else if (mode === "alphanumeric") {
+        flushBytes();
+        let left = count;
+        while (left >= 2) {
+          const v = takeBits(bits, pos, 11);
+          out += ALNUM_CHARS[Math.floor(v / 45)] + ALNUM_CHARS[v % 45];
+          pos += 11; left -= 2;
+        }
+        if (left === 1) { out += ALNUM_CHARS[takeBits(bits, pos, 6)]; pos += 6; }
+      } else if (mode === "byte") {
+        for (let i = 0; i < count; i++) {
+          bytes.push(takeBits(bits, pos, 8));
+          pos += 8;
+        }
+      } else {
+        throw new QRDecodeError("漢字モードは未対応です");
+      }
+      if (pos > bits.length) throw new QRDecodeError("ビット列が不足しています");
+    }
+    flushBytes();
+    return out;
+  }
+
+  /* フォーマット情報の読み出し座標 (描画関数と鏡写し) */
+  function readQRFormatCopies(modules, size) {
+    const g = (x, y) => modules[y][x];
+    let c1 = 0, c2 = 0;
+    for (let i = 0; i < 6; i++) c1 |= g(8, i) << i;
+    c1 |= g(8, 7) << 6;
+    c1 |= g(8, 8) << 7;
+    c1 |= g(7, 8) << 8;
+    for (let i = 0; i < 6; i++) c1 |= g(5 - i, 8) << (9 + i);
+    for (let i = 0; i < 8; i++) c2 |= g(size - 1 - i, 8) << i;
+    for (let i = 0; i < 7; i++) c2 |= g(8, size - 7 + i) << (8 + i);
+    return [c1, c2];
+  }
+
+  function decodeQRMatrix(modules) {
+    const size = modules.length;
+    const version = (size - 17) / 4;
+    if (!Number.isInteger(version) || version < 1 || version > 40) {
+      throw new QRDecodeError("サイズが不正です");
+    }
+    // フォーマット情報: 2 コピー合計の最小ハミング距離
+    const [c1, c2] = readQRFormatCopies(modules, size);
+    let best = -1, bestDist = Infinity;
+    for (let i = 0; i < 32; i++) {
+      const d = hamming15(c1, QR_FORMAT_SEQ[i]) + hamming15(c2, QR_FORMAT_SEQ[i]);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    if (bestDist > 6) throw new QRDecodeError("フォーマット情報を復元できません");
+    const mask = best & 7;
+    const ecLevel = { 1: "L", 0: "M", 3: "Q", 2: "H" }[best >> 3];
+    const ecIdx = QR_EC_IDX[ecLevel];
+
+    // 機能パターンを再構築し、マスク解除しつつデータビットを読む
+    const M = new Matrix(size, size);
+    buildQRFunctionPatterns(M, version);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (!M.isFunc(x, y)) {
+          M.dark[y * size + x] = modules[y][x] ^ (maskPredicate(mask, y, x) ? 1 : 0);
+        }
+      }
+    }
+    const bits = readPlacedBits(M, true, size - 1);
+    const totalCw = QR_TOTAL_CW[version - 1];
+    const allCw = new Uint8Array(totalCw);
+    for (let i = 0; i < totalCw * 8; i++) allCw[i >> 3] |= bits[i] << (7 - (i & 7));
+
+    const dataCw = QR_DATA_CW[ecIdx][version - 1];
+    const { blocks, lens, eccPerBlock } = deinterleave(allCw, totalCw, dataCw, QR_BLOCKS[ecIdx][version - 1]);
+    let corrected = 0;
+    const dataBits = [];
+    for (let b = 0; b < blocks.length; b++) {
+      const nErr = rsCorrect(blocks[b], eccPerBlock);
+      if (nErr < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
+      corrected += nErr;
+    }
+    for (let b = 0; b < blocks.length; b++) {
+      for (let i = 0; i < lens[b]; i++) {
+        for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
+      }
+    }
+    const text = parseBitStream(dataBits, "qr", version);
+    return { text, corrected, ecLevel, mask, versionName: String(version), formatDistance: bestDist };
+  }
+
+  function decodeMicroMatrix(modules) {
+    const size = modules.length;
+    const version = MICRO_SIZES.indexOf(size) + 1;
+    if (version === 0) throw new QRDecodeError("サイズが不正です");
+    let fmt = 0;
+    for (let i = 1; i <= 8; i++) fmt |= modules[8][i] << (15 - i);
+    for (let i = 1; i <= 7; i++) fmt |= modules[i][8] << (i - 1);
+    // この型番で有効なシンボル番号のみ候補にする
+    const validSn = { 1: [0], 2: [1, 2], 3: [3, 4], 4: [5, 6, 7] }[version];
+    let best = -1, bestDist = Infinity;
+    for (const sn of validSn) {
+      for (let m = 0; m < 4; m++) {
+        const d = hamming15(fmt, MICRO_FORMAT_SEQ[(sn << 2) | m]);
+        if (d < bestDist) { bestDist = d; best = (sn << 2) | m; }
+      }
+    }
+    if (bestDist > 3) throw new QRDecodeError("フォーマット情報を復元できません");
+    const sn = best >> 2, mask = best & 3;
+    // シンボル番号 → EC レベル: 0=M1(L) / 1,3,5=L / 2,4,6=M / 7=Q
+    const ecLevel = sn === 0 ? "L" : sn === 7 ? "Q" : sn % 2 === 1 ? "L" : "M";
+    const ecIdx = MICRO_EC_IDX[ecLevel];
+
+    const M = new Matrix(size, size);
+    buildMicroFunctionPatterns(M);
+    const mp = MICRO_MASK_MAP[mask];
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (!M.isFunc(x, y)) {
+          M.dark[y * size + x] = modules[y][x] ^ (maskPredicate(mp, y, x) ? 1 : 0);
+        }
+      }
+    }
+    const bits = readPlacedBits(M, false, size - 1);
+    const [capacityBits, dataCw, eccCw] = MICRO_DATA[ecIdx][version - 1];
+    const cw = new Uint8Array(dataCw + eccCw);
+    for (let i = 0; i < capacityBits; i++) cw[i >> 3] |= bits[i] << (7 - (i & 7));
+    for (let i = 0; i < eccCw * 8; i++) {
+      cw[dataCw + (i >> 3)] |= bits[capacityBits + i] << (7 - (i & 7));
+    }
+    const corrected = rsCorrect(cw, eccCw);
+    if (corrected < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
+    const dataBits = [];
+    for (let i = 0; i < capacityBits; i++) dataBits.push((cw[i >> 3] >> (7 - (i & 7))) & 1);
+    const text = parseBitStream(dataBits, "micro", version);
+    return { text, corrected, ecLevel, mask, versionName: "M" + version, formatDistance: bestDist };
+  }
+
+  function decodeRMQRMatrix(modules) {
+    const h = modules.length, w = modules[0].length;
+    let vi = -1;
+    for (let i = 0; i < 32; i++) {
+      if (RMQR_H[i] === h && RMQR_W[i] === w) { vi = i; break; }
+    }
+    if (vi < 0) throw new QRDecodeError("サイズが不正です");
+    let left = 0, right = 0;
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 3; j++) {
+        left |= modules[1 + i][8 + j] << (j * 5 + i);
+        right |= modules[h - 6 + i][w - 8 + j] << (j * 5 + i);
+      }
+    }
+    left |= modules[1][11] << 15; left |= modules[2][11] << 16; left |= modules[3][11] << 17;
+    right |= modules[h - 6][w - 5] << 15; right |= modules[h - 6][w - 4] << 16; right |= modules[h - 6][w - 3] << 17;
+
+    const ham18 = (a, b) => {
+      let x = (a ^ b) & 0x3ffff, n = 0;
+      while (x) { n += x & 1; x >>= 1; }
+      return n;
+    };
+    let bestEc = -1, bestDist = Infinity;
+    for (let e = 0; e < 2; e++) {
+      const d = ham18(left, RMQR_FORMAT_LEFT[vi + e * 32]) + ham18(right, RMQR_FORMAT_RIGHT[vi + e * 32]);
+      if (d < bestDist) { bestDist = d; bestEc = e; }
+    }
+    if (bestDist > 8) throw new QRDecodeError("フォーマット情報を復元できません");
+
+    const M = new Matrix(w, h);
+    buildRMQRFunctionPatterns(M, vi);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!M.isFunc(x, y)) {
+          M.dark[y * w + x] = modules[y][x] ^ (maskPredicate(4, y, x) ? 1 : 0);
+        }
+      }
+    }
+    const bits = readPlacedBits(M, false, w - 2);
+    const totalCw = RMQR_TOTAL_CW[vi];
+    const allCw = new Uint8Array(totalCw);
+    for (let i = 0; i < totalCw * 8; i++) allCw[i >> 3] |= bits[i] << (7 - (i & 7));
+    const dataCw = RMQR_DATA_CW[bestEc][vi];
+    const { blocks, lens, eccPerBlock } = deinterleave(allCw, totalCw, dataCw, RMQR_BLOCKS[bestEc][vi]);
+    let corrected = 0;
+    for (const block of blocks) {
+      const nErr = rsCorrect(block, eccPerBlock);
+      if (nErr < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
+      corrected += nErr;
+    }
+    const dataBits = [];
+    for (let b = 0; b < blocks.length; b++) {
+      for (let i = 0; i < lens[b]; i++) {
+        for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
+      }
+    }
+    const text = parseBitStream(dataBits, "rmqr", vi + 1);
+    return {
+      text, corrected, ecLevel: bestEc === 0 ? "M" : "H", mask: null,
+      versionName: RMQR_VERSION_NAMES[vi], formatDistance: bestDist,
+    };
+  }
+
+  /* 行列 (0/1 の二次元配列) を復号する。編集後のリアルタイム表示用。 */
+  function decode(modules, standard) {
+    switch (standard) {
+      case "qr": return decodeQRMatrix(modules);
+      case "micro": return decodeMicroMatrix(modules);
+      case "rmqr": return decodeRMQRMatrix(modules);
+    }
+    throw new QRDecodeError("unknown standard: " + standard);
+  }
+
+  /* ========================================================================
    * 公開 API
    * ====================================================================== */
   function encode(options) {
@@ -1023,8 +1460,12 @@
 
   const QRLib = {
     encode,
+    decode,
     QREncodeError,
+    QRDecodeError,
     RMQR_VERSION_NAMES,
+    RMQR_HEIGHTS: RMQR_H.slice(),
+    RMQR_WIDTHS: RMQR_W.slice(),
     MICRO_SIZES,
   };
 
