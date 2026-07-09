@@ -526,7 +526,6 @@
 
   function render() {
     const std = state.standard;
-    if (std === "vericode") return;
     try {
       const result = runEncode();
       current = {
@@ -701,23 +700,13 @@
     for (const tab of document.querySelectorAll(".tab")) {
       tab.setAttribute("aria-selected", tab.dataset.standard === std ? "true" : "false");
     }
-    const isNotice = std === "vericode";
-    $("controls").hidden = isNotice;
-    $("preview").hidden = isNotice;
-    $("vericode-notice").hidden = !isNotice;
-    if (!isNotice) {
-      rebuildControls();
-      render();
-    }
+    rebuildControls();
+    render();
   }
 
   for (const tab of document.querySelectorAll(".tab")) {
     tab.addEventListener("click", () => selectStandard(tab.dataset.standard));
   }
-  for (const btn of document.querySelectorAll("[data-goto]")) {
-    btn.addEventListener("click", () => selectStandard(btn.dataset.goto));
-  }
-
   dataInput.addEventListener("input", render);
 
   new ResizeObserver(() => {

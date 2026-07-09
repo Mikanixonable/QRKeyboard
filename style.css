@@ -366,31 +366,6 @@ textarea:focus, select:focus, input:focus-visible,
 .info dt { color: var(--text-sub); }
 .info dd { font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* ---------- Vericode 案内 ---------- */
-.notice {
-  flex: 1;
-  align-self: center;
-  max-width: 560px;
-  margin: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 22px 26px;
-}
-.notice h2 { font-size: 15px; margin-bottom: 10px; }
-.notice p { color: var(--text-sub); font-size: 13px; }
-.notice p + p { margin-top: 10px; }
-.link-button {
-  border: none;
-  background: none;
-  color: var(--accent2);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-}
-
 /* ---------- モバイル ---------- */
 @media (max-width: 760px) {
   body { font-size: 13px; }
@@ -414,7 +389,6 @@ textarea:focus, select:focus, input:focus-visible,
   .preview { flex: 1; min-height: 100px; gap: 4px; }
   .info { padding: 4px 10px; gap: 1px 12px; font-size: 11px; }
   .content-bar { padding: 4px 10px; font-size: 11.5px; }
-  .notice { padding: 16px 14px; margin: 0 auto; }
 }
 
 /* 高さの低い横向きモバイルなど */

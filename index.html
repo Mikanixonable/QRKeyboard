@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>コードジェネレーター</title>
+  <title>QRKeyboard</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='white'/><path fill='black' d='M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z'/></svg>">
 </head>
 <body>
   <header class="app-header">
-    <h1>コードジェネレーター</h1>
+    <h1>QRKeyboard</h1>
     <nav class="tabs" role="tablist" aria-label="コード規格">
       <div class="tab-group tab-group-qr" aria-label="QRコード系">
         <button class="tab" role="tab" data-standard="qr" aria-selected="true">QR</button>
@@ -20,7 +20,6 @@
         <button class="tab" role="tab" data-standard="datamatrix" aria-selected="false">DataMatrix</button>
         <button class="tab" role="tab" data-standard="aztec" aria-selected="false">Aztec</button>
         <button class="tab" role="tab" data-standard="barcode" aria-selected="false">バーコード</button>
-        <button class="tab" role="tab" data-standard="vericode" aria-selected="false">Vericode</button>
       </div>
     </nav>
   </header>
@@ -82,21 +81,6 @@
         <span class="content-status" id="content-status"></span>
       </div>
       <dl class="info" id="info"></dl>
-    </section>
-
-    <section class="notice" id="vericode-notice" hidden>
-      <h2>Vericode について</h2>
-      <p>
-        Vericode (VeriCode) は米 Veritec 社の独自シンボロジーで、
-        仕様書が一般公開されておらず、ISO/IEC による国際規格化もされていません。
-        公開規格に準拠した実装ができないため、本ツールでは生成に対応していません。
-      </p>
-      <p>
-        同等の用途 (高密度な二次元マトリックスコード) には、国際規格化されている
-        <button class="link-button" data-goto="datamatrix">DataMatrix (ISO/IEC 16022)</button> や
-        <button class="link-button" data-goto="aztec">Aztec (ISO/IEC 24778)</button>
-        をご利用ください。
-      </p>
     </section>
   </main>
 
