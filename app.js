@@ -161,23 +161,26 @@
       render();
     }));
 
+    const resolved = current && current.results[0];
+
     if (std === "qr") {
-      const range = document.createElement("input");
-      range.type = "range";
-      range.min = "1";
-      range.max = "40";
-      range.value = String(st.version);
-      range.disabled = st.versionAuto;
-      const value = document.createElement("span");
-      value.className = "version-value";
-      value.textContent = st.versionAuto ? "—" : `型番 ${st.version}`;
-      range.addEventListener("input", () => {
-        st.version = Number(range.value);
-        value.textContent = `型番 ${st.version}`;
-        render();
-      });
-      line.append(range, value);
       box.appendChild(line);
+      const items = [];
+      for (let v = 1; v <= 40; v++) {
+        items.push({
+          label: String(v),
+          checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
+          disabled: st.versionAuto,
+          onClick: () => {
+            st.versionAuto = false;
+            st.version = v;
+            rebuildControls();
+            render();
+          },
+        });
+      }
+      box.appendChild(makeTileGrid(items));
+      return;
     } else if (std === "micro") {
       const seg = document.createElement("div");
       seg.className = "segmented";
@@ -193,136 +196,132 @@
       line.appendChild(seg);
       box.appendChild(line);
     } else if (std === "rmqr") {
-      // 高さ・幅の2パラメーターで決まるため、2次元タイル選択のモーダルで選ぶ
+      // 高さ・幅の2パラメーターで決まるため、最初から2次元タイルを右メニューゾーンに表示する
       box.appendChild(line);
-      const trigger = document.createElement("button");
-      trigger.type = "button";
-      trigger.className = "small-button version-modal-trigger";
-      trigger.disabled = st.versionAuto;
-      trigger.textContent = st.versionAuto
-        ? "自動選択中"
-        : `R${st.height} × ${st.width} (タップで変更)`;
-      trigger.addEventListener("click", openRmqrModal);
-      box.appendChild(trigger);
+      box.appendChild(buildRmqrTileGrid());
       return;
     } else if (std === "datamatrix") {
-      const select = document.createElement("select");
-      select.disabled = st.sizeAuto;
-      const sq = document.createElement("optgroup");
-      sq.label = "正方形";
-      const rect = document.createElement("optgroup");
-      rect.label = "長方形 (DMRE ではない標準サイズ)";
-      DMLib.SIZES.forEach((s, i) => {
-        const opt = document.createElement("option");
-        opt.value = String(i + 1);
-        opt.textContent = `${DMLib.SIZE_NAMES[i]} (${s.data} 語)`;
-        (s.rect ? rect : sq).appendChild(opt);
-      });
-      select.append(sq, rect);
-      select.value = String(st.size);
-      select.addEventListener("change", () => {
-        st.size = Number(select.value);
-        render();
-      });
-      line.appendChild(select);
       box.appendChild(line);
+      const items = DMLib.SIZES.map((s, i) => ({
+        label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
+        title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
+        checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
+        disabled: st.sizeAuto,
+        onClick: () => {
+          st.sizeAuto = false;
+          st.size = i + 1;
+          rebuildControls();
+          render();
+        },
+      }));
+      box.appendChild(makeTileGrid(items, "minmax(38px, 1fr)"));
       return;
     } else if (std === "aztec") {
-      const select = document.createElement("select");
-      select.disabled = st.versionAuto;
-      const compact = document.createElement("optgroup");
-      compact.label = "コンパクト型";
-      for (let l = 1; l <= 4; l++) {
-        const opt = document.createElement("option");
-        opt.value = String(l);
-        const dim = 11 + 4 * l;
-        opt.textContent = `コンパクト ${l}層 (${dim}×${dim})`;
-        compact.appendChild(opt);
-      }
-      const full = document.createElement("optgroup");
-      full.label = "フル型";
-      for (let l = 1; l <= 32; l++) {
-        const opt = document.createElement("option");
-        opt.value = String(l + 4);
-        const dim = 151 - 2 * [66, 64, 62, 60, 57, 55, 53, 51, 49, 47, 45, 42, 40, 38, 36, 34,
-          32, 30, 28, 25, 23, 21, 19, 17, 15, 13, 10, 8, 6, 4, 2, 0][l - 1];
-        opt.textContent = `フル ${l}層 (${dim}×${dim})`;
-        full.appendChild(opt);
-      }
-      select.append(compact, full);
-      select.value = String(st.version);
-      select.addEventListener("change", () => {
-        st.version = Number(select.value);
-        render();
-      });
-      line.appendChild(select);
       box.appendChild(line);
+      const items = [];
+      for (let l = 1; l <= 4; l++) {
+        const dim = 11 + 4 * l;
+        items.push({
+          label: `C${l}`,
+          title: `コンパクト ${l}層 (${dim}×${dim})`,
+          checked: st.versionAuto ? !!resolved && resolved.version === l : st.version === l,
+          disabled: st.versionAuto,
+          onClick: () => { st.versionAuto = false; st.version = l; rebuildControls(); render(); },
+        });
+      }
+      const fullDims = [66, 64, 62, 60, 57, 55, 53, 51, 49, 47, 45, 42, 40, 38, 36, 34,
+        32, 30, 28, 25, 23, 21, 19, 17, 15, 13, 10, 8, 6, 4, 2, 0];
+      for (let l = 1; l <= 32; l++) {
+        const dim = 151 - 2 * fullDims[l - 1];
+        const v = l + 4;
+        items.push({
+          label: `F${l}`,
+          title: `フル ${l}層 (${dim}×${dim})`,
+          checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
+          disabled: st.versionAuto,
+          onClick: () => { st.versionAuto = false; st.version = v; rebuildControls(); render(); },
+        });
+      }
+      box.appendChild(makeTileGrid(items));
       return;
     }
   }
 
-  /* ---------- 型番選択モーダル (rMQR: 高さ×幅の2次元タイル選択) ---------- */
+  /* ---------- タイル選択UI (クリック数を減らすため、最初から選択肢を表示する) ---------- */
 
-  /* 列(幅)は右に行くほど、行(高さ)は上に行くほど単純・小さい選択肢になるよう並べる */
-  const RMQR_MODAL_WIDTHS = [139, 99, 77, 59, 43, 27];
-  const RMQR_MODAL_HEIGHTS = [7, 9, 11, 13, 15, 17];
+  function makeTileGrid(items, colWidth) {
+    const grid = document.createElement("div");
+    grid.className = "tile-grid";
+    grid.setAttribute("role", "radiogroup");
+    if (colWidth) grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${colWidth === true ? "28px" : colWidth}, 1fr))`;
+    for (const item of items) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tile";
+      btn.setAttribute("role", "radio");
+      btn.setAttribute("aria-checked", item.checked ? "true" : "false");
+      btn.disabled = !!item.disabled;
+      btn.textContent = item.label;
+      if (item.title) btn.title = item.title;
+      btn.addEventListener("click", item.onClick);
+      grid.appendChild(btn);
+    }
+    return grid;
+  }
 
-  function openRmqrModal() {
+  /* rMQR: 高さ×幅の2次元タイル。列(幅)は左ほど小さく、行(高さ)は上ほど単純・小さい選択肢にする */
+  const RMQR_TILE_WIDTHS = [27, 43, 59, 77, 99, 139];
+  const RMQR_TILE_HEIGHTS = [7, 9, 11, 13, 15, 17];
+
+  function buildRmqrTileGrid() {
     const st = state.rmqr;
-    const grid = $("version-modal-grid");
-    grid.textContent = "";
-    grid.style.gridTemplateColumns = `auto repeat(${RMQR_MODAL_WIDTHS.length}, 1fr)`;
+    const resolved = current && current.results[0];
+    const grid = document.createElement("div");
+    grid.className = "tile-grid-2d";
+    grid.style.gridTemplateColumns = `auto repeat(${RMQR_TILE_WIDTHS.length}, 1fr)`;
 
     grid.appendChild(document.createElement("span"));
-    for (const w of RMQR_MODAL_WIDTHS) {
+    for (const w of RMQR_TILE_WIDTHS) {
       const lbl = document.createElement("span");
       lbl.className = "modal-axis-label";
-      lbl.textContent = `×${w}`;
+      lbl.textContent = w;
       grid.appendChild(lbl);
     }
-    for (const h of RMQR_MODAL_HEIGHTS) {
+    for (const h of RMQR_TILE_HEIGHTS) {
       const hLbl = document.createElement("span");
       hLbl.className = "modal-axis-label";
       hLbl.textContent = `R${h}`;
       grid.appendChild(hLbl);
       const validWidths = rmqrWidthsFor(h);
-      for (const w of RMQR_MODAL_WIDTHS) {
+      for (const w of RMQR_TILE_WIDTHS) {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "modal-tile";
+        btn.className = "tile";
         if (!validWidths.includes(w)) {
           btn.disabled = true;
           grid.appendChild(btn);
           continue;
         }
         btn.setAttribute("role", "radio");
-        btn.setAttribute("aria-checked", st.height === h && st.width === w ? "true" : "false");
-        btn.textContent = `R${h} × ${w}`;
+        const isChecked = st.versionAuto
+          ? !!resolved && resolved.height === h && resolved.width === w
+          : st.height === h && st.width === w;
+        btn.setAttribute("aria-checked", isChecked ? "true" : "false");
+        btn.disabled = st.versionAuto;
+        btn.title = `R${h} × ${w}`;
+        btn.textContent = String(w);
         btn.addEventListener("click", () => {
           st.versionAuto = false;
           st.height = h;
           st.width = w;
-          closeRmqrModal();
           rebuildControls();
           render();
         });
         grid.appendChild(btn);
       }
     }
-    $("version-modal").hidden = false;
+    return grid;
   }
-
-  function closeRmqrModal() {
-    $("version-modal").hidden = true;
-  }
-
-  $("version-modal-close").addEventListener("click", closeRmqrModal);
-  $("version-modal").addEventListener("click", (ev) => {
-    if (ev.target.id === "version-modal") closeRmqrModal();
-  });
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") closeRmqrModal();
-  });
 
   /* ---------- マスクコントロール ---------- */
 
@@ -474,15 +473,23 @@
       if (!(e && e.code === "TOO_LONG") || std === "barcode") throw e;
     }
     const structuredEligible = std === "qr" && state.splitMode === "structured";
-    const maxCount = structuredEligible ? 16 : 40;
+    /* Structured Append は ISO/IEC 18004 で16記号までと規定されているが、
+       シンプル分割にはコード数の上限がないため、1文字/コードになるまで試す */
+    const maxCount = structuredEligible ? 16 : Math.max(2, text.length);
     let lastErr = null;
+    let lastChunkCount = -1;
     for (let count = 2; count <= maxCount; count++) {
       const chunks = splitEvenly(text, count);
-      if (chunks.length < count) break; // 1文字/コードが下限。これ以上細かくできない
+      /* Structured Append はヘッダーに記号数を厳密に埋め込むため、
+         端数処理で実際の分割数が count と一致しない場合はそのまま使えない */
+      if (structuredEligible && chunks.length !== count) continue;
+      /* 端数処理で前回と同じ分割結果になる場合は再試行しても無駄なのでスキップ */
+      if (chunks.length === lastChunkCount) continue;
+      lastChunkCount = chunks.length;
       try {
         const parity = structuredEligible ? QRLib.computeParity(text) : null;
         const results = chunks.map((chunk, i) =>
-          encodeOne(std, chunk, structuredEligible ? { index: i, count, parity } : null));
+          encodeOne(std, chunk, structuredEligible ? { index: i, count: chunks.length, parity } : null));
         return { results, texts: chunks };
       } catch (e) {
         if (e && e.code === "TOO_LONG") { lastErr = e; continue; }
@@ -761,6 +768,7 @@
     editReset.hidden = true;
     qrCard.style.background = state.outerSame ? state.bg : state.outerBg;
     buildContentDisplayControl();
+    buildVersionControl();
   }
 
   function render() {
@@ -779,6 +787,7 @@
       const editable = results.length === 1 && QR_FAMILY.includes(std);
       canvas.classList.toggle("editable", editable);
       buildContentDisplayControl();
+      buildVersionControl();
       drawCurrent();
       renderInfo();
     } catch (e) {
