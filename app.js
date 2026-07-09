@@ -531,6 +531,51 @@
     return lo === 0 ? "…" : text.slice(0, lo) + "…";
   }
 
+  /* 指定幅を超える場合は改行する。maxLines に収まらない場合は最終行を省略し、truncated:true を返す */
+  function wrapToLines(context, text, maxWidth, maxLines) {
+    const lines = [];
+    let remaining = text;
+    let truncated = false;
+    while (remaining.length > 0 && lines.length < maxLines) {
+      if (context.measureText(remaining).width <= maxWidth) {
+        lines.push(remaining);
+        remaining = "";
+        break;
+      }
+      if (lines.length === maxLines - 1) {
+        lines.push(truncateToWidth(context, remaining, maxWidth));
+        remaining = "";
+        truncated = true;
+        break;
+      }
+      let lo = 1, hi = remaining.length;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (context.measureText(remaining.slice(0, mid)).width <= maxWidth) lo = mid;
+        else hi = mid - 1;
+      }
+      lines.push(remaining.slice(0, lo));
+      remaining = remaining.slice(lo);
+    }
+    if (remaining.length > 0) truncated = true;
+    return { lines: lines.length ? lines : [""], truncated };
+  }
+
+  /* 行数上限に収まらない場合は、収まるようになるまでフォントサイズを縮小する。
+     最小サイズでも収まらなければ、その時点で省略する。 */
+  function fitCaptionLines(context, text, maxWidth, maxLines, basePx, minPx) {
+    let fontPx = minPx;
+    let lines = [""];
+    for (let px = basePx; px >= minPx; px--) {
+      context.font = `${px}px monospace`;
+      const result = wrapToLines(context, text, maxWidth, maxLines);
+      fontPx = px;
+      lines = result.lines;
+      if (!result.truncated) break;
+    }
+    return { fontPx, lines };
+  }
+
   function drawCurrent() {
     if (!current) return;
     const results = current.results;
@@ -576,14 +621,41 @@
       const qz = r.quietZone;
       const mw = r.width + qz * 2;
       const mh = r.height + qz * 2;
-      const captionH = showCaption ? Math.round(20 * dpr) : 0;
-      const scale = Math.max(1, Math.floor(Math.min(availW / mw, (availH - captionH) / mh)));
+      const outerColor = state.outerSame ? state.bg : state.outerBg;
+      const fontPxBase = Math.round(12 * dpr);
+      const fontPxMin = Math.round(8 * dpr);
+
+      /* キャプション幅は最終的なコード幅 (mw*scale) に依存し、その幅は
+         キャプションの高さにも依存するため、収束するまで数回計算し直す。
+         行数上限に収まらない場合は、収まるまでフォントを縮小する。 */
+      let scale = Math.max(1, Math.floor(Math.min(availW / mw, availH / mh)));
+      let lines = [];
+      let captionFontPx = fontPxBase;
+      let captionH = 0;
+      if (showCaption) {
+        for (let iter = 0; iter < 4; iter++) {
+          const maxW = Math.max(20, mw * scale - 8 * dpr);
+          const fit = fitCaptionLines(ctx, perCodeContentText(0), maxW, 3, fontPxBase, fontPxMin);
+          captionFontPx = fit.fontPx;
+          lines = fit.lines;
+          const lineH = Math.round(captionFontPx * 1.4);
+          const newCaptionH = lines.length * lineH + Math.round(6 * dpr);
+          const newScale = Math.max(1, Math.floor(Math.min(availW / mw, (availH - newCaptionH) / mh)));
+          captionH = newCaptionH;
+          if (newScale === scale) break;
+          scale = newScale;
+        }
+      }
       canvas.width = mw * scale;
       canvas.height = mh * scale + captionH;
       canvas.style.width = `${canvas.width / dpr}px`;
       canvas.style.height = `${canvas.height / dpr}px`;
-      ctx.fillStyle = state.bg;
+      /* 背景色 (外側) を全体に敷き、その上にクワイエットゾーン込みのコード面だけ塗る。
+         内容表示はクワイエットゾーンの外 (背景色の上) に表示されるようにする。 */
+      ctx.fillStyle = outerColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = state.bg;
+      ctx.fillRect(0, 0, mw * scale, mh * scale);
       ctx.fillStyle = state.fg;
       const modules = current.modulesList[0];
       for (let y = 0; y < r.height; y++) {
@@ -593,12 +665,14 @@
         }
       }
       if (showCaption) {
-        ctx.font = `${Math.round(12 * dpr)}px monospace`;
+        ctx.font = `${captionFontPx}px monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         const maxW = canvas.width - 8 * dpr;
-        const text = truncateToWidth(ctx, perCodeContentText(0), maxW);
-        ctx.fillText(text, canvas.width / 2, mh * scale + 3 * dpr, maxW);
+        const lineH = Math.round(captionFontPx * 1.4);
+        lines.forEach((line, i) => {
+          ctx.fillText(line, canvas.width / 2, mh * scale + 3 * dpr + i * lineH, maxW);
+        });
       }
       lastDraw = { scale, qz, dpr };
       return;
@@ -611,8 +685,43 @@
     const showCombined = placement === "combined" || placement === "both";
     const { cols, rows } = gridDims(n);
     const gap = GRID_GAP * dpr;
-    const captionH = showCaptions ? Math.round(16 * dpr) : 0;
-    const combinedH = showCombined ? Math.round(18 * dpr) : 0;
+    const outerColor = state.outerSame ? state.bg : state.outerBg;
+
+    const cellFontPxBase = Math.round(10 * dpr);
+    const cellFontPxMin = Math.round(7 * dpr);
+    const cellWEstimate = (availW - gap * (cols - 1)) / cols;
+    /* 全コードのキャプションが2行に収まる、共通で使える最大フォントサイズを探す */
+    let cellFontPx = cellFontPxBase;
+    let cellLines = [];
+    if (showCaptions) {
+      for (let px = cellFontPxBase; px >= cellFontPxMin; px--) {
+        ctx.font = `${px}px monospace`;
+        let allFit = true;
+        const trial = results.map((_, i) => {
+          const result = wrapToLines(ctx, perCodeContentText(i), cellWEstimate - 4 * dpr, 2);
+          if (result.truncated) allFit = false;
+          return result.lines;
+        });
+        cellFontPx = px;
+        cellLines = trial;
+        if (allFit) break;
+      }
+    }
+    const cellLineH = Math.round(cellFontPx * 1.4);
+    const maxCellLines = showCaptions ? Math.max(...cellLines.map((l) => l.length)) : 0;
+    const captionH = showCaptions ? maxCellLines * cellLineH + Math.round(4 * dpr) : 0;
+
+    const combinedFontPxBase = Math.round(10 * dpr);
+    const combinedFontPxMin = Math.round(7 * dpr);
+    const combinedRaw = combinedContentText();
+    const combinedFit = showCombined
+      ? fitCaptionLines(ctx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, availW - 8 * dpr, 2, combinedFontPxBase, combinedFontPxMin)
+      : { fontPx: combinedFontPxBase, lines: [] };
+    const combinedFontPx = combinedFit.fontPx;
+    const combinedLines = combinedFit.lines;
+    const combinedLineH = Math.round(combinedFontPx * 1.4);
+    const combinedH = showCombined ? combinedLines.length * combinedLineH + Math.round(6 * dpr) : 0;
+
     const gridAvailH = availH - combinedH;
     const cellW = (availW - gap * (cols - 1)) / cols;
     const cellH = (gridAvailH - gap * (rows - 1)) / rows - captionH;
@@ -625,10 +734,11 @@
     canvas.height = Math.round(availH);
     canvas.style.width = `${canvas.width / dpr}px`;
     canvas.style.height = `${canvas.height / dpr}px`;
-    ctx.fillStyle = state.bg;
+    /* 背景色 (外側) を全体に敷き、各コードのクワイエットゾーン込みの面だけ塗る。
+       内容表示はクワイエットゾーンの外 (背景色の上) に表示されるようにする。 */
+    ctx.fillStyle = outerColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = state.fg;
-    if (showCaptions || showCombined) ctx.font = `${Math.round(10 * dpr)}px monospace`;
     for (let i = 0; i < n; i++) {
       const r = results[i];
       const { mw, mh } = dims[i];
@@ -638,6 +748,9 @@
       const offX = cellX + (cellW - mw * scale) / 2;
       const offY = cellY + (cellH - mh * scale) / 2;
       const qz = r.quietZone;
+      ctx.fillStyle = state.bg;
+      ctx.fillRect(offX, offY, mw * scale, mh * scale);
+      ctx.fillStyle = state.fg;
       const modules = current.modulesList[i];
       for (let y = 0; y < r.height; y++) {
         const rowData = modules[y];
@@ -646,20 +759,23 @@
         }
       }
       if (showCaptions) {
+        ctx.font = `${cellFontPx}px monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         const maxW = cellW - 4 * dpr;
-        const text = truncateToWidth(ctx, perCodeContentText(i), maxW);
-        ctx.fillText(text, cellX + cellW / 2, cellY + cellH + 2 * dpr, maxW);
+        cellLines[i].forEach((line, li) => {
+          ctx.fillText(line, cellX + cellW / 2, cellY + cellH + 2 * dpr + li * cellLineH, maxW);
+        });
       }
     }
     if (showCombined) {
+      ctx.font = `${combinedFontPx}px monospace`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      const maxW = canvas.width - 8 * dpr;
-      const combined = combinedContentText();
-      const text = truncateToWidth(ctx, combined == null ? "(読み取り不能)" : combined, maxW);
-      ctx.fillText(text, canvas.width / 2, gridAvailH + 3 * dpr, maxW);
+      const maxW = availW - 8 * dpr;
+      combinedLines.forEach((line, li) => {
+        ctx.fillText(line, canvas.width / 2, gridAvailH + 3 * dpr + li * combinedLineH, maxW);
+      });
     }
     lastDraw = null;
   }
@@ -743,14 +859,26 @@
       items.push(["種類", r.versionName]);
       items.push(["幅", `${r.width} モジュール`]);
     }
-    for (const [dt, dd] of items) {
+    let contentDd = null;
+    items.forEach(([dt, dd], i) => {
       const div = document.createElement("div");
       const dtEl = document.createElement("dt");
       const ddEl = document.createElement("dd");
+      if (i === 0) {
+        div.className = "info-content"; // 内容: 枠からはみ出さないよう改行する
+        contentDd = ddEl;
+      }
       dtEl.textContent = dt;
       ddEl.textContent = dd;
       div.append(dtEl, ddEl);
       infoEl.appendChild(div);
+    });
+    /* 2行に収まらない場合は、収まるまでフォントサイズを縮小する */
+    if (contentDd) {
+      for (let px = 12; px >= 8; px--) {
+        contentDd.style.fontSize = `${px}px`;
+        if (contentDd.scrollHeight <= contentDd.clientHeight + 1) break;
+      }
     }
   }
 

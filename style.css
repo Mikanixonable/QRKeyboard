@@ -451,6 +451,18 @@ textarea:focus, select:focus, input:focus-visible,
 .info > div { display: flex; gap: 6px; white-space: nowrap; }
 .info dt { color: var(--text-sub); }
 .info dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+/* 内容: 枠をはみ出さないよう改行させる (1行分で見切れるが overflow:hidden で崩れない) */
+.info-content {
+  flex: 1 0 100%;
+  white-space: normal !important;
+}
+.info-content dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  max-height: 32px;
+  line-height: 1.4;
+  overflow: hidden;
+}
 
 /* ---------- 複雑度(型番)タイル選択 (クリック数を減らすため最初から選択肢を表示) ---------- */
 .tile-grid {
