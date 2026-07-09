@@ -212,6 +212,17 @@
             </button>
           </div>
         </div>
+
+        <div class="tab-category" data-category="decode">
+          <div class="tab-category-label">デコード</div>
+          <div class="decode-group">
+            <button type="button" class="small-button" id="scan-camera-btn">📷 カメラで読み取り</button>
+            <button type="button" class="small-button" id="scan-image-btn">🖼 画像を選択</button>
+            <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
+            <input type="file" id="scan-file-input" accept="image/*" hidden>
+            <span class="scan-status" id="scan-status"></span>
+          </div>
+        </div>
       </div>
     </nav>
 
@@ -243,19 +254,12 @@
                 <input type="checkbox" id="color-outer-same">
                 <span>同じ色にする</span>
               </label>
-              <button type="button" class="small-button" id="color-reset">リセット</button>
+              <button type="button" class="small-button" id="color-reset">白黒に戻す</button>
             </div>
           </div>
         </div>
 
         <div class="content-middle" id="qr-zone">
-          <div class="scan-toolbar">
-            <button type="button" class="small-button" id="scan-camera-btn">📷 カメラで読み取り</button>
-            <button type="button" class="small-button" id="scan-image-btn">🖼 画像を選択</button>
-            <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
-            <input type="file" id="scan-file-input" accept="image/*" hidden>
-            <span class="scan-status" id="scan-status"></span>
-          </div>
           <div class="qr-frame">
             <div class="qr-card" id="qr-card">
               <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>

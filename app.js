@@ -59,7 +59,7 @@
     return btn;
   }
 
-  function makeAutoToggle(checked, onChange, text) {
+  function makeToggle(checked, onChange, text) {
     const label = document.createElement("label");
     label.className = "auto-toggle";
     const cb = document.createElement("input");
@@ -154,7 +154,7 @@
     const line = document.createElement("div");
     line.className = "version-line";
     const autoKey = std === "datamatrix" ? "sizeAuto" : "versionAuto";
-    line.appendChild(makeAutoToggle(st[autoKey], (checked) => {
+    line.appendChild(makeToggle(st[autoKey], (checked) => {
       st[autoKey] = checked;
       if (std === "micro") normalizeMicroEc();
       rebuildControls();
@@ -283,13 +283,13 @@
     grid.appendChild(document.createElement("span"));
     for (const w of RMQR_TILE_WIDTHS) {
       const lbl = document.createElement("span");
-      lbl.className = "modal-axis-label";
+      lbl.className = "tile-axis-label";
       lbl.textContent = w;
       grid.appendChild(lbl);
     }
     for (const h of RMQR_TILE_HEIGHTS) {
       const hLbl = document.createElement("span");
-      hLbl.className = "modal-axis-label";
+      hLbl.className = "tile-axis-label";
       hLbl.textContent = `R${h}`;
       grid.appendChild(hLbl);
       const validWidths = rmqrWidthsFor(h);
@@ -297,12 +297,13 @@
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "tile";
+        btn.setAttribute("role", "radio");
         if (!validWidths.includes(w)) {
           btn.disabled = true;
+          btn.setAttribute("aria-checked", "false");
           grid.appendChild(btn);
           continue;
         }
-        btn.setAttribute("role", "radio");
         const isChecked = st.versionAuto
           ? !!resolved && resolved.height === h && resolved.width === w
           : st.height === h && st.width === w;
@@ -371,7 +372,7 @@
     if (field.hidden) return;
     box.textContent = "";
     const st = state[std];
-    box.appendChild(makeAutoToggle(st.showText, (checked) => {
+    box.appendChild(makeToggle(st.showText, (checked) => {
       st.showText = checked;
       render();
     }, "バーコードの下に数字を表示"));
@@ -996,15 +997,27 @@
 
     if (std === "rmqr") {
       if (params.has("h") && params.has("w")) {
-        st.versionAuto = false;
-        st.height = Number(params.get("h"));
-        st.width = Number(params.get("w"));
+        const h = Number(params.get("h"));
+        const w = Number(params.get("w"));
+        // 高さ×幅の組み合わせが有効な場合のみ手動指定として採用する。
+        // 不正な組み合わせを黙って自動選択にフォールバックすると、
+        // UI 上のタイル選択表示と実際に生成されるコードが食い違うため、
+        // ここで弾いて自動のままにする。
+        if (rmqrVersionOf(h, w) !== 0) {
+          st.versionAuto = false;
+          st.height = h;
+          st.width = w;
+        }
       }
     } else if (params.has("ver")) {
       const autoKey = std === "datamatrix" ? "sizeAuto" : "versionAuto";
-      st[autoKey] = false;
-      if (std === "datamatrix") st.size = Number(params.get("ver"));
-      else st.version = Number(params.get("ver"));
+      const ver = Number(params.get("ver"));
+      const maxVer = std === "qr" ? 40 : std === "micro" ? 4 : std === "datamatrix" ? DMLib.SIZES.length : 36;
+      if (Number.isInteger(ver) && ver >= 1 && ver <= maxVer) {
+        st[autoKey] = false;
+        if (std === "datamatrix") st.size = ver;
+        else st.version = ver;
+      }
     }
 
     if ((std === "qr" || std === "micro") && params.has("mask")) {
@@ -1377,6 +1390,14 @@
     dataInput.value = text;
     if (mapping) {
       if (mapping.symbology) state.barcode.symbology = mapping.symbology;
+      /* ZXing の Result は誤り訂正レベルは取得できるが、型番やマスクパターンは
+         内部で使い切った後に破棄されており公開APIからは取得できないため、
+         それらは自動選択のままにする */
+      if (mapping.std === "qr") {
+        const ec = result.getResultMetadata() && result.getResultMetadata().get(ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL);
+        const ecLevel = ec && ec.toString ? ec.toString() : ec;
+        if (ecLevel && ["L", "M", "Q", "H"].includes(ecLevel)) state.qr.ec = ecLevel;
+      }
       setScanStatus(`読み取り成功 (${ZXing.BarcodeFormat[format]})`);
       selectStandard(mapping.std);
     } else {
@@ -1420,6 +1441,17 @@
     }
     scanVideo.srcObject = scanStream;
     await scanVideo.play();
+    // カメラが権限取り消しや切断で途中終了した場合、映像要素は最後のフレームの
+    // 寸法を保持し続けるため videoWidth 判定だけではループが停止しない。
+    // トラック終了イベントで明示的にスキャンを止める。
+    scanStream.getVideoTracks().forEach((t) => {
+      t.addEventListener("ended", () => {
+        if (scanStream) {
+          setScanStatus("カメラが切断されました", true);
+          stopCameraScan();
+        }
+      });
+    });
     canvas.hidden = true;
     qrMessage.hidden = true;
     editReset.hidden = true;
