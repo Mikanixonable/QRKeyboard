@@ -798,6 +798,98 @@
         console.error(e);
       }
     }
+    syncUrl();
+  }
+
+  /* ---------- URLへの状態保存 (規格・内容・色・複雑度・誤り訂正・マスク・分割方式) ---------- */
+
+  function syncUrl() {
+    const std = state.standard;
+    const st = state[std];
+    const params = new URLSearchParams();
+    params.set("std", std);
+    params.set("text", dataInput.value);
+    params.set("fg", state.fg);
+    params.set("bg", state.bg);
+    params.set("obg", state.outerBg);
+    if (state.outerSame) params.set("same", "1");
+    if (std === "qr" && state.splitMode !== "simple") params.set("split", state.splitMode);
+
+    if (std === "qr" || std === "micro" || std === "rmqr") {
+      params.set("ec", st.ec);
+    } else if (std === "aztec") {
+      params.set("ec", String(st.ec));
+    }
+
+    if (std === "rmqr") {
+      if (!st.versionAuto) {
+        params.set("h", String(st.height));
+        params.set("w", String(st.width));
+      }
+    } else if (std === "qr" || std === "micro" || std === "datamatrix" || std === "aztec") {
+      const autoKey = std === "datamatrix" ? "sizeAuto" : "versionAuto";
+      if (!st[autoKey]) params.set("ver", String(std === "datamatrix" ? st.size : st.version));
+    }
+
+    if ((std === "qr" || std === "micro") && !st.maskAuto) {
+      params.set("mask", String(st.mask));
+    }
+
+    if (std === "barcode") {
+      params.set("sym", st.symbology);
+      if (!st.showText) params.set("btxt", "0");
+    }
+
+    history.replaceState(null, "", "?" + params.toString());
+  }
+
+  const STANDARDS = ["qr", "micro", "rmqr", "datamatrix", "aztec", "barcode"];
+
+  /* 起動時に URL のクエリパラメーターから状態を復元する。復元した規格名 (なければ null) を返す */
+  function loadFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const std = params.get("std");
+    if (!STANDARDS.includes(std)) return null;
+
+    if (params.has("text")) dataInput.value = params.get("text");
+    if (params.has("fg")) state.fg = params.get("fg");
+    if (params.has("bg")) state.bg = params.get("bg");
+    if (params.has("obg")) state.outerBg = params.get("obg");
+    state.outerSame = params.get("same") === "1";
+    if (params.has("split")) state.splitMode = params.get("split");
+    $("color-fg").value = state.fg;
+    $("color-bg").value = state.bg;
+    $("color-outer").value = state.outerBg;
+    $("color-outer").disabled = state.outerSame;
+    $("color-outer-same").checked = state.outerSame;
+
+    const st = state[std];
+    if (params.has("ec")) st.ec = std === "aztec" ? Number(params.get("ec")) : params.get("ec");
+
+    if (std === "rmqr") {
+      if (params.has("h") && params.has("w")) {
+        st.versionAuto = false;
+        st.height = Number(params.get("h"));
+        st.width = Number(params.get("w"));
+      }
+    } else if (params.has("ver")) {
+      const autoKey = std === "datamatrix" ? "sizeAuto" : "versionAuto";
+      st[autoKey] = false;
+      if (std === "datamatrix") st.size = Number(params.get("ver"));
+      else st.version = Number(params.get("ver"));
+    }
+
+    if ((std === "qr" || std === "micro") && params.has("mask")) {
+      st.maskAuto = false;
+      st.mask = Number(params.get("mask"));
+    }
+
+    if (std === "barcode") {
+      if (params.has("sym")) st.symbology = params.get("sym");
+      if (params.has("btxt")) st.showText = params.get("btxt") !== "0";
+    }
+
+    return std;
   }
 
   /* ---------- 編集 (単一の QR 系コードのみ) ---------- */
@@ -1002,19 +1094,23 @@
   $("color-fg").addEventListener("input", () => {
     state.fg = $("color-fg").value;
     drawCurrent();
+    syncUrl();
   });
   $("color-bg").addEventListener("input", () => {
     state.bg = $("color-bg").value;
     drawCurrent();
+    syncUrl();
   });
   $("color-outer").addEventListener("input", () => {
     state.outerBg = $("color-outer").value;
     drawCurrent();
+    syncUrl();
   });
   $("color-outer-same").addEventListener("change", () => {
     state.outerSame = $("color-outer-same").checked;
     $("color-outer").disabled = state.outerSame;
     drawCurrent();
+    syncUrl();
   });
   $("color-reset").addEventListener("click", () => {
     state.fg = "#000000";
@@ -1027,6 +1123,7 @@
     $("color-outer").disabled = false;
     $("color-outer-same").checked = false;
     drawCurrent();
+    syncUrl();
   });
 
   /* ---------- タブ切り替え ---------- */
@@ -1056,5 +1153,6 @@
     if (current) drawCurrent();
   }).observe(qrCard);
 
-  selectStandard("qr");
+  const restoredStd = loadFromUrl();
+  selectStandard(restoredStd || "qr");
 })();
