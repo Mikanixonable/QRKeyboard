@@ -13,13 +13,10 @@
   const contentLabel = $("content-label");
   const contentText = $("content-text");
   const contentStatus = $("content-status");
-  const editHint = $("edit-hint");
   const editReset = $("edit-reset");
-  const previewToolbar = document.querySelector(".preview-toolbar");
 
   const MODE_NAMES = { numeric: "数字", alphanumeric: "英数字", byte: "バイト (UTF-8)" };
   const QR_FAMILY = ["qr", "micro", "rmqr"];
-  const RMQR_HEIGHTS = [7, 9, 11, 13, 15, 17];
 
   function rmqrWidthsFor(h) {
     const widths = [];
@@ -40,6 +37,9 @@
     standard: "qr",
     fg: "#000000",
     bg: "#ffffff",
+    outerBg: "#e5e7eb",
+    outerSame: false,
+    splitMode: "simple", // "simple" | "structured" (QR の Structured Append)
     qr: { ec: "M", versionAuto: true, version: 5, maskAuto: true, mask: 0 },
     micro: { ec: "L", versionAuto: true, version: 4, maskAuto: true, mask: 0 },
     rmqr: { ec: "M", versionAuto: true, height: 11, width: 43 },
@@ -195,49 +195,17 @@
       line.appendChild(seg);
       box.appendChild(line);
     } else if (std === "rmqr") {
-      // 高さ (R7〜R17) と幅を分けて選択
+      // 高さ・幅の2パラメーターで決まるため、2次元タイル選択のモーダルで選ぶ
       box.appendChild(line);
-      const hLine = document.createElement("div");
-      hLine.className = "version-line";
-      const hLabel = document.createElement("span");
-      hLabel.className = "dim-label";
-      hLabel.textContent = "高さ";
-      const hSeg = document.createElement("div");
-      hSeg.className = "segmented";
-      for (const h of RMQR_HEIGHTS) {
-        const btn = makeSegButton(`R${h}`, !st.versionAuto && st.height === h, () => {
-          st.versionAuto = false;
-          st.height = h;
-          const widths = rmqrWidthsFor(h);
-          if (!widths.includes(st.width)) st.width = widths[0];
-          rebuildControls();
-          render();
-        });
-        btn.disabled = st.versionAuto;
-        hSeg.appendChild(btn);
-      }
-      hLine.append(hLabel, hSeg);
-      box.appendChild(hLine);
-
-      const wLine = document.createElement("div");
-      wLine.className = "version-line";
-      const wLabel = document.createElement("span");
-      wLabel.className = "dim-label";
-      wLabel.textContent = "幅";
-      const wSeg = document.createElement("div");
-      wSeg.className = "segmented";
-      for (const w of rmqrWidthsFor(st.height)) {
-        const btn = makeSegButton(`×${w}`, !st.versionAuto && st.width === w, () => {
-          st.versionAuto = false;
-          st.width = w;
-          rebuildControls();
-          render();
-        });
-        btn.disabled = st.versionAuto;
-        wSeg.appendChild(btn);
-      }
-      wLine.append(wLabel, wSeg);
-      box.appendChild(wLine);
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "small-button version-modal-trigger";
+      trigger.disabled = st.versionAuto;
+      trigger.textContent = st.versionAuto
+        ? "自動選択中"
+        : `R${st.height} × ${st.width} (タップで変更)`;
+      trigger.addEventListener("click", openRmqrModal);
+      box.appendChild(trigger);
       return;
     } else if (std === "datamatrix") {
       const select = document.createElement("select");
@@ -295,6 +263,69 @@
     }
   }
 
+  /* ---------- 型番選択モーダル (rMQR: 高さ×幅の2次元タイル選択) ---------- */
+
+  /* 列(幅)は右に行くほど、行(高さ)は上に行くほど単純・小さい選択肢になるよう並べる */
+  const RMQR_MODAL_WIDTHS = [139, 99, 77, 59, 43, 27];
+  const RMQR_MODAL_HEIGHTS = [7, 9, 11, 13, 15, 17];
+
+  function openRmqrModal() {
+    const st = state.rmqr;
+    const grid = $("version-modal-grid");
+    grid.textContent = "";
+    grid.style.gridTemplateColumns = `auto repeat(${RMQR_MODAL_WIDTHS.length}, 1fr)`;
+
+    grid.appendChild(document.createElement("span"));
+    for (const w of RMQR_MODAL_WIDTHS) {
+      const lbl = document.createElement("span");
+      lbl.className = "modal-axis-label";
+      lbl.textContent = `×${w}`;
+      grid.appendChild(lbl);
+    }
+    for (const h of RMQR_MODAL_HEIGHTS) {
+      const hLbl = document.createElement("span");
+      hLbl.className = "modal-axis-label";
+      hLbl.textContent = `R${h}`;
+      grid.appendChild(hLbl);
+      const validWidths = rmqrWidthsFor(h);
+      for (const w of RMQR_MODAL_WIDTHS) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "modal-tile";
+        if (!validWidths.includes(w)) {
+          btn.disabled = true;
+          grid.appendChild(btn);
+          continue;
+        }
+        btn.setAttribute("role", "radio");
+        btn.setAttribute("aria-checked", st.height === h && st.width === w ? "true" : "false");
+        btn.textContent = `R${h} × ${w}`;
+        btn.addEventListener("click", () => {
+          st.versionAuto = false;
+          st.height = h;
+          st.width = w;
+          closeRmqrModal();
+          rebuildControls();
+          render();
+        });
+        grid.appendChild(btn);
+      }
+    }
+    $("version-modal").hidden = false;
+  }
+
+  function closeRmqrModal() {
+    $("version-modal").hidden = true;
+  }
+
+  $("version-modal-close").addEventListener("click", closeRmqrModal);
+  $("version-modal").addEventListener("click", (ev) => {
+    if (ev.target.id === "version-modal") closeRmqrModal();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closeRmqrModal();
+  });
+
   /* ---------- マスクコントロール ---------- */
 
   function buildMaskControl() {
@@ -349,28 +380,46 @@
     }, "バーコードの下に数字を表示"));
   }
 
+  function buildSplitModeControl() {
+    const field = $("split-mode-field");
+    const box = $("split-mode-control");
+    const std = state.standard;
+    field.hidden = std !== "qr";
+    if (field.hidden) return;
+    box.textContent = "";
+    [["シンプル分割", "simple"], ["Structured Append", "structured"]].forEach(([label, v]) => {
+      box.appendChild(makeSegButton(label, state.splitMode === v, () => {
+        state.splitMode = v;
+        rebuildControls();
+        render();
+      }));
+    });
+  }
+
   function rebuildControls() {
     $("preview").classList.toggle("other-standard", !QR_FAMILY.includes(state.standard));
     buildEcControl();
     buildVersionControl();
     buildMaskControl();
     buildBarcodeTextControl();
+    buildSplitModeControl();
   }
 
   /* ---------- エンコード ---------- */
 
-  function runEncode() {
-    const std = state.standard;
+  function encodeOne(std, text, structuredOpts) {
     const st = state[std];
-    const text = dataInput.value;
     switch (std) {
       case "qr":
-      case "micro":
-        return QRLib.encode({
+      case "micro": {
+        const opts = {
           standard: std, text, ecLevel: st.ec,
           version: st.versionAuto ? 0 : st.version,
           mask: st.maskAuto ? -1 : st.mask,
-        });
+        };
+        if (structuredOpts && std === "qr") opts.structured = structuredOpts;
+        return QRLib.encode(opts);
+      }
       case "rmqr":
         return QRLib.encode({
           standard: "rmqr", text, ecLevel: st.ec,
@@ -385,23 +434,74 @@
     }
   }
 
+  /* 文字数ベースの均等分割 (structured append 時も含め、境界はコードポイント単位) */
+  function splitEvenly(text, count) {
+    const per = Math.ceil(text.length / count);
+    const chunks = [];
+    for (let i = 0; i < text.length; i += per) chunks.push(text.slice(i, i + per));
+    return chunks;
+  }
+
+  /* 容量オーバー時は複数コードに分割する。QR 表示域の大きさは変えず、
+     各コードを縮小してグリッド配置する (drawCurrent 側で対応)。 */
+  function runEncodeMulti() {
+    const std = state.standard;
+    const text = dataInput.value;
+    try {
+      return [encodeOne(std, text, null)];
+    } catch (e) {
+      if (!(e && e.code === "TOO_LONG") || std === "barcode") throw e;
+    }
+    const structuredEligible = std === "qr" && state.splitMode === "structured";
+    const maxCount = structuredEligible ? 16 : 40;
+    let lastErr = null;
+    for (let count = 2; count <= maxCount; count++) {
+      const chunks = splitEvenly(text, count);
+      if (chunks.length < count) break; // 1文字/コードが下限。これ以上細かくできない
+      try {
+        const parity = structuredEligible ? QRLib.computeParity(text) : null;
+        return chunks.map((chunk, i) =>
+          encodeOne(std, chunk, structuredEligible ? { index: i, count, parity } : null));
+      } catch (e) {
+        if (e && e.code === "TOO_LONG") { lastErr = e; continue; }
+        throw e;
+      }
+    }
+    if (lastErr) throw lastErr;
+    const err = new Error("分割してもデータが大きすぎます");
+    err.code = "TOO_LONG";
+    throw err;
+  }
+
+  /* コード数から縦横のグリッド分割数を決める (正方形に近くなるように) */
+  function gridDims(n) {
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+    return { cols, rows };
+  }
+
   /* ---------- 描画 ---------- */
 
-  let current = null; // { result, modules(編集用コピー), edited }
-  let lastDraw = null; // クリック座標→モジュール変換用
+  let current = null; // { results[], modulesList[](編集用コピー), edited }
+  let lastDraw = null; // クリック座標→モジュール変換用 (単一コードの場合のみ)
+
+  /* コード端(クワイエットゾーン)からQR表示UI端までの最低距離。全規格で共通 */
+  const CANVAS_MARGIN = 16;
+  /* 複数コード表示時の、コード間の最低間隔 */
+  const GRID_GAP = 6;
 
   function drawCurrent() {
     if (!current) return;
-    const r = current.result;
+    const results = current.results;
     const box = qrCard.getBoundingClientRect();
-    const toolbarH = previewToolbar.getBoundingClientRect().height;
     const dpr = window.devicePixelRatio || 1;
-    const availW = Math.max(40, box.width - 24) * dpr;
-    const availH = Math.max(40, box.height - 24 - toolbarH) * dpr;
+    const availW = Math.max(40, box.width - CANVAS_MARGIN * 2) * dpr;
+    const availH = Math.max(40, box.height - CANVAS_MARGIN * 2) * dpr;
 
-    qrCard.style.background = state.bg;
+    qrCard.style.background = state.outerSame ? state.bg : state.outerBg;
 
-    if (r.type === "linear") {
+    if (results.length === 1 && results[0].type === "linear") {
+      const r = results[0];
       const showText = state.barcode.showText;
       const totalW = r.quietLeft + r.width + r.quietRight;
       const scale = Math.max(1, Math.floor(availW / totalW));
@@ -429,25 +529,66 @@
       return;
     }
 
-    const qz = r.quietZone;
-    const mw = r.width + qz * 2;
-    const mh = r.height + qz * 2;
-    const scale = Math.max(1, Math.floor(Math.min(availW / mw, availH / mh)));
-    canvas.width = mw * scale;
-    canvas.height = mh * scale;
+    if (results.length === 1) {
+      const r = results[0];
+      const qz = r.quietZone;
+      const mw = r.width + qz * 2;
+      const mh = r.height + qz * 2;
+      const scale = Math.max(1, Math.floor(Math.min(availW / mw, availH / mh)));
+      canvas.width = mw * scale;
+      canvas.height = mh * scale;
+      canvas.style.width = `${canvas.width / dpr}px`;
+      canvas.style.height = `${canvas.height / dpr}px`;
+      ctx.fillStyle = state.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = state.fg;
+      const modules = current.modulesList[0];
+      for (let y = 0; y < r.height; y++) {
+        const row = modules[y];
+        for (let x = 0; x < r.width; x++) {
+          if (row[x]) ctx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
+        }
+      }
+      lastDraw = { scale, qz, dpr };
+      return;
+    }
+
+    /* 複数コード: QR 表示域の大きさは変えず、グリッドに縮小配置する。編集は非対応。 */
+    const n = results.length;
+    const { cols, rows } = gridDims(n);
+    const gap = GRID_GAP * dpr;
+    const cellW = (availW - gap * (cols - 1)) / cols;
+    const cellH = (availH - gap * (rows - 1)) / rows;
+    const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
+    let scale = Infinity;
+    for (const { mw, mh } of dims) scale = Math.min(scale, Math.floor(Math.min(cellW / mw, cellH / mh)));
+    scale = Math.max(1, scale);
+
+    canvas.width = Math.round(availW);
+    canvas.height = Math.round(availH);
     canvas.style.width = `${canvas.width / dpr}px`;
     canvas.style.height = `${canvas.height / dpr}px`;
     ctx.fillStyle = state.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = state.fg;
-    const modules = current.modules;
-    for (let y = 0; y < r.height; y++) {
-      const row = modules[y];
-      for (let x = 0; x < r.width; x++) {
-        if (row[x]) ctx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
+    for (let i = 0; i < n; i++) {
+      const r = results[i];
+      const { mw, mh } = dims[i];
+      const col = i % cols, row = Math.floor(i / cols);
+      const cellX = col * (cellW + gap);
+      const cellY = row * (cellH + gap);
+      const offX = cellX + (cellW - mw * scale) / 2;
+      const offY = cellY + (cellH - mh * scale) / 2;
+      const qz = r.quietZone;
+      const modules = current.modulesList[i];
+      for (let y = 0; y < r.height; y++) {
+        const rowData = modules[y];
+        for (let x = 0; x < r.width; x++) {
+          if (rowData[x]) ctx.fillRect(offX + (x + qz) * scale, offY + (y + qz) * scale, scale, scale);
+        }
       }
     }
-    lastDraw = { scale, qz, dpr };
+    lastDraw = null;
   }
 
   /* ---------- 内容表示 (QR 系は行列からリアルタイム復号) ---------- */
@@ -461,14 +602,21 @@
       contentStatus.textContent = "";
       return;
     }
-    const r = current.result;
+    const results = current.results;
+    const r = results[0];
     if (QR_FAMILY.includes(std)) {
-      contentLabel.textContent = "内容(復号)";
+      contentLabel.textContent = results.length > 1 ? "内容(復号・結合)" : "内容(復号)";
       try {
-        const d = QRLib.decode(current.modules, std);
-        contentText.textContent = d.text === "" ? "(空)" : d.text;
-        if (d.corrected > 0) {
-          contentStatus.textContent = `誤り訂正で ${d.corrected} コード語を復元`;
+        let combined = "";
+        let totalCorrected = 0;
+        for (let i = 0; i < results.length; i++) {
+          const d = QRLib.decode(current.modulesList[i], std);
+          combined += d.text;
+          totalCorrected += d.corrected;
+        }
+        contentText.textContent = combined === "" ? "(空)" : combined;
+        if (totalCorrected > 0) {
+          contentStatus.textContent = `誤り訂正で ${totalCorrected} コード語を復元`;
           contentStatus.classList.add("corrected");
         } else {
           contentStatus.textContent = current.edited ? "訂正なしで一致" : "";
@@ -498,9 +646,15 @@
     if (!current) return;
     const std = state.standard;
     const st = state[std];
-    const r = current.result;
+    const results = current.results;
+    const r = results[0];
     const items = [];
     const sizeText = `${r.width}×${r.height}`;
+
+    if (results.length > 1) {
+      const modeName = std === "qr" && state.splitMode === "structured" ? "Structured Append" : "シンプル分割";
+      items.push(["分割", `${results.length} 個 (${modeName})`]);
+    }
 
     if (std === "qr" || std === "micro" || std === "rmqr") {
       const auto = st.versionAuto ? "自動 → " : "";
@@ -544,29 +698,29 @@
     canvas.hidden = true;
     qrMessage.hidden = false;
     qrMessage.textContent = message;
-    infoEl.hidden = true;
-    contentBar.hidden = true;
+    /* content-bar / info は非表示にせず空にするだけにして、
+       QR 表示域 (qr-frame) の高さがエラー時にも変化しないようにする */
+    infoEl.textContent = "";
+    contentText.textContent = "";
+    contentStatus.textContent = "";
     editReset.hidden = true;
-    qrCard.style.background = "";
+    qrCard.style.background = state.outerSame ? state.bg : state.outerBg;
   }
 
   function render() {
     const std = state.standard;
     try {
-      const result = runEncode();
+      const results = runEncodeMulti();
       current = {
-        result,
-        modules: result.modules.map((row) => row.slice()),
+        results,
+        modulesList: results.map((res) => res.modules.map((row) => row.slice())),
         edited: false,
       };
       canvas.hidden = false;
       qrMessage.hidden = true;
-      infoEl.hidden = false;
-      contentBar.hidden = false;
       editReset.hidden = true;
-      const editable = QR_FAMILY.includes(std);
+      const editable = results.length === 1 && QR_FAMILY.includes(std);
       canvas.classList.toggle("editable", editable);
-      editHint.hidden = !editable;
       drawCurrent();
       updateContent();
       renderInfo();
@@ -580,18 +734,19 @@
     }
   }
 
-  /* ---------- 編集 (QR 系のみ) ---------- */
+  /* ---------- 編集 (単一の QR 系コードのみ) ---------- */
 
   canvas.addEventListener("click", (ev) => {
-    if (!current || !lastDraw || !QR_FAMILY.includes(state.standard)) return;
+    if (!current || !lastDraw || current.results.length !== 1 || !QR_FAMILY.includes(state.standard)) return;
     const rect = canvas.getBoundingClientRect();
     const { scale, qz, dpr } = lastDraw;
     const x = Math.floor(((ev.clientX - rect.left) * dpr) / scale) - qz;
     const y = Math.floor(((ev.clientY - rect.top) * dpr) / scale) - qz;
-    const r = current.result;
+    const r = current.results[0];
     if (x < 0 || y < 0 || x >= r.width || y >= r.height) return;
-    current.modules[y][x] ^= 1;
-    current.edited = current.modules.some((row, yy) =>
+    const modules = current.modulesList[0];
+    modules[y][x] ^= 1;
+    current.edited = modules.some((row, yy) =>
       row.some((v, xx) => v !== r.modules[yy][xx]));
     editReset.hidden = !current.edited;
     drawCurrent();
@@ -599,8 +754,8 @@
   });
 
   editReset.addEventListener("click", () => {
-    if (!current) return;
-    current.modules = current.result.modules.map((row) => row.slice());
+    if (!current || current.results.length !== 1) return;
+    current.modulesList[0] = current.results[0].modules.map((row) => row.slice());
     current.edited = false;
     editReset.hidden = true;
     drawCurrent();
@@ -623,10 +778,11 @@
 
   $("save-png").addEventListener("click", () => {
     if (!current) return;
-    const r = current.result;
+    const results = current.results;
     const off = document.createElement("canvas");
     const octx = off.getContext("2d");
-    if (r.type === "linear") {
+    if (results.length === 1 && results[0].type === "linear") {
+      const r = results[0];
       const showText = state.barcode.showText;
       const scale = 4;
       const totalW = r.quietLeft + r.width + r.quietRight;
@@ -646,7 +802,8 @@
         octx.textBaseline = "top";
         octx.fillText(r.display, off.width / 2, barH + 24, off.width);
       }
-    } else {
+    } else if (results.length === 1) {
+      const r = results[0];
       const qz = r.quietZone;
       const mw = r.width + qz * 2, mh = r.height + qz * 2;
       const scale = Math.max(4, Math.min(16, Math.floor(2048 / Math.max(mw, mh))));
@@ -657,18 +814,45 @@
       octx.fillStyle = state.fg;
       for (let y = 0; y < r.height; y++) {
         for (let x = 0; x < r.width; x++) {
-          if (current.modules[y][x]) octx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
+          if (current.modulesList[0][y][x]) octx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
         }
       }
+    } else {
+      const { cols, rows } = gridDims(results.length);
+      const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
+      const maxMw = Math.max(...dims.map((d) => d.mw));
+      const maxMh = Math.max(...dims.map((d) => d.mh));
+      const scale = Math.max(2, Math.min(16, Math.floor(2048 / (Math.max(maxMw, maxMh) * Math.max(cols, rows)))));
+      const gap = 4 * scale;
+      const cellW = maxMw * scale, cellH = maxMh * scale;
+      off.width = cols * cellW + (cols - 1) * gap;
+      off.height = rows * cellH + (rows - 1) * gap;
+      octx.fillStyle = state.bg;
+      octx.fillRect(0, 0, off.width, off.height);
+      octx.fillStyle = state.fg;
+      results.forEach((r, i) => {
+        const qz = r.quietZone;
+        const col = i % cols, row = Math.floor(i / cols);
+        const baseX = col * (cellW + gap) + (cellW - dims[i].mw * scale) / 2;
+        const baseY = row * (cellH + gap) + (cellH - dims[i].mh * scale) / 2;
+        const modules = current.modulesList[i];
+        for (let y = 0; y < r.height; y++) {
+          for (let x = 0; x < r.width; x++) {
+            if (modules[y][x]) octx.fillRect(baseX + (x + qz) * scale, baseY + (y + qz) * scale, scale, scale);
+          }
+        }
+      });
     }
     off.toBlob((blob) => blob && download(blob, `${filenameBase()}.png`), "image/png");
   });
 
   $("save-svg").addEventListener("click", () => {
     if (!current) return;
-    const r = current.result;
+    const results = current.results;
+    const escapeXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     let svg;
-    if (r.type === "linear") {
+    if (results.length === 1 && results[0].type === "linear") {
+      const r = results[0];
       const showText = state.barcode.showText;
       const totalW = r.quietLeft + r.width + r.quietRight;
       const barH = Math.max(30, Math.round(totalW * 0.3));
@@ -684,7 +868,6 @@
           x += run;
         } else x++;
       }
-      const escapeXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const text = showText
         ? `<text x="${totalW / 2}" y="${barH + 8 + textH}" font-family="monospace" ` +
           `font-size="${textH}" text-anchor="middle">${escapeXml(r.display)}</text>`
@@ -692,16 +875,18 @@
       svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" ` +
         `width="${totalW * 4}" height="${totalH * 4}" shape-rendering="crispEdges">` +
         `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}${text}</g></svg>`;
-    } else {
+    } else if (results.length === 1) {
+      const r = results[0];
       const qz = r.quietZone;
       const mw = r.width + qz * 2, mh = r.height + qz * 2;
+      const modules = current.modulesList[0];
       let rects = "";
       for (let y = 0; y < r.height; y++) {
         let x = 0;
         while (x < r.width) {
-          if (current.modules[y][x]) {
+          if (modules[y][x]) {
             let run = 1;
-            while (x + run < r.width && current.modules[y][x + run]) run++;
+            while (x + run < r.width && modules[y][x + run]) run++;
             rects += `<rect x="${x + qz}" y="${y + qz}" width="${run}" height="1"/>`;
             x += run;
           } else x++;
@@ -710,6 +895,38 @@
       svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${mw} ${mh}" ` +
         `width="${mw * 10}" height="${mh * 10}" shape-rendering="crispEdges">` +
         `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}</g></svg>`;
+    } else {
+      const { cols, rows } = gridDims(results.length);
+      const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
+      const maxMw = Math.max(...dims.map((d) => d.mw));
+      const maxMh = Math.max(...dims.map((d) => d.mh));
+      const gap = Math.round(maxMw * 0.15);
+      const totalW = cols * maxMw + (cols - 1) * gap;
+      const totalH = rows * maxMh + (rows - 1) * gap;
+      let groups = "";
+      results.forEach((r, i) => {
+        const qz = r.quietZone;
+        const col = i % cols, row = Math.floor(i / cols);
+        const baseX = col * (maxMw + gap) + (maxMw - dims[i].mw) / 2;
+        const baseY = row * (maxMh + gap) + (maxMh - dims[i].mh) / 2;
+        const modules = current.modulesList[i];
+        let rects = "";
+        for (let y = 0; y < r.height; y++) {
+          let x = 0;
+          while (x < r.width) {
+            if (modules[y][x]) {
+              let run = 1;
+              while (x + run < r.width && modules[y][x + run]) run++;
+              rects += `<rect x="${x + qz}" y="${y + qz}" width="${run}" height="1"/>`;
+              x += run;
+            } else x++;
+          }
+        }
+        groups += `<g transform="translate(${baseX} ${baseY})">${rects}</g>`;
+      });
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" ` +
+        `width="${totalW * 10}" height="${totalH * 10}" shape-rendering="crispEdges">` +
+        `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${groups}</g></svg>`;
     }
     download(new Blob([svg], { type: "image/svg+xml" }), `${filenameBase()}.svg`);
   });
@@ -724,11 +941,25 @@
     state.bg = $("color-bg").value;
     drawCurrent();
   });
+  $("color-outer").addEventListener("input", () => {
+    state.outerBg = $("color-outer").value;
+    drawCurrent();
+  });
+  $("color-outer-same").addEventListener("change", () => {
+    state.outerSame = $("color-outer-same").checked;
+    $("color-outer").disabled = state.outerSame;
+    drawCurrent();
+  });
   $("color-reset").addEventListener("click", () => {
     state.fg = "#000000";
     state.bg = "#ffffff";
+    state.outerBg = "#e5e7eb";
+    state.outerSame = false;
     $("color-fg").value = state.fg;
     $("color-bg").value = state.bg;
+    $("color-outer").value = state.outerBg;
+    $("color-outer").disabled = false;
+    $("color-outer-same").checked = false;
     drawCurrent();
   });
 

@@ -158,7 +158,15 @@
               </label>
               <label class="color-item">
                 <input type="color" id="color-bg" value="#ffffff">
+                <span>クワイエットゾーン</span>
+              </label>
+              <label class="color-item">
+                <input type="color" id="color-outer" value="#e5e7eb">
                 <span>背景</span>
+              </label>
+              <label class="color-item">
+                <input type="checkbox" id="color-outer-same">
+                <span>同じ色にする</span>
               </label>
               <button type="button" class="small-button" id="color-reset">リセット</button>
             </div>
@@ -170,10 +178,7 @@
             <div class="qr-card" id="qr-card">
               <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>
               <p class="qr-message" id="qr-message" hidden></p>
-              <div class="preview-toolbar">
-                <span class="edit-hint" id="edit-hint" hidden>クリックでモジュールを反転できます</span>
-                <button type="button" class="small-button" id="edit-reset" hidden>編集をリセット</button>
-              </div>
+              <button type="button" class="small-button edit-reset" id="edit-reset" hidden>編集をリセット</button>
             </div>
           </div>
           <div class="content-bar" id="content-bar">
@@ -190,11 +195,6 @@
             <div class="segmented" id="ec-control" role="radiogroup" aria-labelledby="ec-label"></div>
           </div>
 
-          <div class="field" id="version-field">
-            <label id="version-label">複雑度(型番)</label>
-            <div class="version-box" id="version-control"></div>
-          </div>
-
           <div class="field" id="barcode-text-field" hidden>
             <label id="barcode-text-label">表示</label>
             <div id="barcode-text-control"></div>
@@ -205,6 +205,11 @@
             <div class="segmented" id="mask-control" role="radiogroup" aria-labelledby="mask-label"></div>
           </div>
 
+          <div class="field" id="split-mode-field" hidden>
+            <label id="split-mode-label">容量超過時の分割方式</label>
+            <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
+          </div>
+
           <div class="save-menu" id="save-menu">
             <button type="button" class="small-button" id="save-png">PNG保存</button>
             <button type="button" class="small-button" id="save-svg">SVG保存</button>
@@ -213,9 +218,24 @@
       </section>
     </main>
 
-    <nav class="right-menu-zone" aria-label="予備メニュー"></nav>
+    <nav class="right-menu-zone" aria-label="予備メニュー">
+      <div class="field" id="version-field">
+        <label id="version-label">複雑度(型番)</label>
+        <div class="version-box" id="version-control"></div>
+      </div>
+    </nav>
 
    </div>
+
+  <div class="modal-overlay" id="version-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="version-modal-title">
+      <div class="modal-header">
+        <span id="version-modal-title">型番を選択</span>
+        <button type="button" class="small-button" id="version-modal-close">閉じる</button>
+      </div>
+      <div class="modal-grid" id="version-modal-grid"></div>
+    </div>
+  </div>
 
   <script src="qrcode.js"></script>
   <script src="datamatrix.js"></script>

@@ -622,6 +622,9 @@
     return score;
   }
 
+  /* Structured Append (ISO/IEC 18004 §8) のヘッダ長: モード(4) + 記号位置(4) + 記号数-1(4) + パリティ(8) */
+  const STRUCTURED_APPEND_BITS = 20;
+
   function encodeQR(text, opts) {
     const ecLevel = opts.ecLevel || "M";
     if (!(ecLevel in QR_EC_IDX)) throw new QREncodeError("BAD_OPTION", "誤り訂正レベルが不正です");
@@ -629,18 +632,20 @@
     const bytes = mode === "byte" ? utf8Bytes(text) : null;
     const charCount = mode === "byte" ? bytes.length : text.length;
     const dataBits = dataBitLength(mode, charCount);
+    const sa = opts.structured || null;
+    const headerBits = sa ? STRUCTURED_APPEND_BITS : 0;
 
     // バージョン選択
     let version = 0;
     if (opts.version) {
       version = opts.version;
-      if (qrNeededBits(version, mode, charCount, dataBits) > qrCapacityBits(version, ecLevel) ||
+      if (headerBits + qrNeededBits(version, mode, charCount, dataBits) > qrCapacityBits(version, ecLevel) ||
           charCount >= 1 << qrCciBits(version, mode)) {
         throw new QREncodeError("TOO_LONG", "データがバージョン " + version + " (" + ecLevel + ") の容量を超えています");
       }
     } else {
       for (let v = 1; v <= 40; v++) {
-        if (qrNeededBits(v, mode, charCount, dataBits) <= qrCapacityBits(v, ecLevel) &&
+        if (headerBits + qrNeededBits(v, mode, charCount, dataBits) <= qrCapacityBits(v, ecLevel) &&
             charCount < 1 << qrCciBits(v, mode)) {
           version = v;
           break;
@@ -652,6 +657,12 @@
     // ビット列構築
     const capacityBits = qrCapacityBits(version, ecLevel);
     const bb = new BitBuffer();
+    if (sa) {
+      bb.put(3, 4); // Structured Append モード指示子 0011
+      bb.put(sa.index, 4); // 記号位置 (0 起点)
+      bb.put(sa.count - 1, 4); // 総記号数 - 1
+      bb.put(sa.parity, 8); // パリティデータ
+    }
     bb.put({ numeric: 1, alphanumeric: 2, byte: 4 }[mode], 4);
     bb.put(charCount, qrCciBits(version, mode));
     appendDataBits(bb, mode, text, bytes);
@@ -694,7 +705,16 @@
       usedBits, capacityBits,
       totalCodewords: QR_TOTAL_CW[version - 1],
       dataCodewords: QR_DATA_CW[ecIdx][version - 1],
+      structured: sa ? { index: sa.index, count: sa.count } : null,
     };
+  }
+
+  /* Structured Append 用: 元データ全体のバイト単位 XOR パリティ */
+  function computeParity(text) {
+    const bytes = utf8Bytes(text);
+    let p = 0;
+    for (const b of bytes) p ^= b;
+    return p;
   }
 
   /* ========================================================================
@@ -1188,6 +1208,7 @@
   function parseBitStream(bits, standard, version) {
     let pos = 0;
     let out = "";
+    let structured = null;
     const bytes = [];
     const flushBytes = () => {
       if (bytes.length) {
@@ -1205,6 +1226,16 @@
         const mv = takeBits(bits, pos, modeBitsLen);
         pos += modeBitsLen;
         if (mv === 0 && standard !== "micro") break; // 終端パターン
+        if (standard === "qr" && mv === 3) {
+          // Structured Append ヘッダ: 記号位置(4) + 総記号数-1(4) + パリティ(8)
+          if (pos + 16 > bits.length) break;
+          const index = takeBits(bits, pos, 4);
+          const count = takeBits(bits, pos + 4, 4) + 1;
+          const parity = takeBits(bits, pos + 8, 8);
+          pos += 16;
+          structured = { index, count, parity };
+          continue;
+        }
         if (standard === "qr") {
           mode = { 1: "numeric", 2: "alphanumeric", 4: "byte", 8: "kanji" }[mv];
         } else if (standard === "rmqr") {
@@ -1254,7 +1285,7 @@
       if (pos > bits.length) throw new QRDecodeError("ビット列が不足しています");
     }
     flushBytes();
-    return out;
+    return { text: out, structured };
   }
 
   /* フォーマット情報の読み出し座標 (描画関数と鏡写し) */
@@ -1318,8 +1349,8 @@
         for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
       }
     }
-    const text = parseBitStream(dataBits, "qr", version);
-    return { text, corrected, ecLevel, mask, versionName: String(version), formatDistance: bestDist };
+    const { text, structured } = parseBitStream(dataBits, "qr", version);
+    return { text, corrected, ecLevel, mask, versionName: String(version), formatDistance: bestDist, structured };
   }
 
   function decodeMicroMatrix(modules) {
@@ -1365,7 +1396,7 @@
     if (corrected < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
     const dataBits = [];
     for (let i = 0; i < capacityBits; i++) dataBits.push((cw[i >> 3] >> (7 - (i & 7))) & 1);
-    const text = parseBitStream(dataBits, "micro", version);
+    const { text } = parseBitStream(dataBits, "micro", version);
     return { text, corrected, ecLevel, mask, versionName: "M" + version, formatDistance: bestDist };
   }
 
@@ -1425,7 +1456,7 @@
         for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
       }
     }
-    const text = parseBitStream(dataBits, "rmqr", vi + 1);
+    const { text } = parseBitStream(dataBits, "rmqr", vi + 1);
     return {
       text, corrected, ecLevel: bestEc === 0 ? "M" : "H", mask: null,
       versionName: RMQR_VERSION_NAMES[vi], formatDistance: bestDist,
@@ -1461,6 +1492,7 @@
   const QRLib = {
     encode,
     decode,
+    computeParity,
     QREncodeError,
     QRDecodeError,
     RMQR_VERSION_NAMES,

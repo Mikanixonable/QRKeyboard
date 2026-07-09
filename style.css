@@ -184,7 +184,12 @@ body {
 /* ---------- 右メニューゾーン ---------- */
 .right-menu-zone {
   flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 14px;
   border-left: 1px solid var(--border);
+  overflow-y: auto;
 }
 
 /* ---------- 中央コンテンツゾーン ---------- */
@@ -229,7 +234,11 @@ body {
 .content-bottom {
   display: flex;
   flex-direction: column;
+  flex: none;
   gap: 10px;
+  /* 規格によって表示項目数が変わっても QR 表示域の大きさが変化しないよう、
+     全規格中で最大の高さ (QR: 分割方式の行を含む) に固定する */
+  min-height: 292px;
 }
 
 /* ---------- 入力コントロール ---------- */
@@ -358,14 +367,17 @@ textarea:focus, select:focus, input:focus-visible,
 .color-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 .color-item {
   display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 5px;
   font-size: 12px;
   color: var(--text-sub);
+  white-space: nowrap;
   cursor: pointer;
 }
 .color-item input[type="color"] {
@@ -403,25 +415,18 @@ textarea:focus, select:focus, input:focus-visible,
   width: min(100cqw, 100cqh);
   height: min(100cqw, 100cqh);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
-.preview-toolbar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 24px;
-  padding: 4px 0 8px;
+.edit-reset {
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
-.edit-hint { font-size: 11px; color: var(--text-sub); }
 #qr-canvas { display: block; }
 #qr-canvas.editable { cursor: crosshair; }
 .qr-message {
@@ -470,16 +475,90 @@ textarea:focus, select:focus, input:focus-visible,
 .info {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 2px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 14px;
   font-size: 12px;
+  /* 規格によって項目数が変わっても QR 表示域の大きさが変化しないよう、
+     最大2行ぶんの高さで固定する */
+  height: 48px;
+  overflow: hidden;
 }
 .info > div { display: flex; gap: 6px; white-space: nowrap; }
 .info dt { color: var(--text-sub); }
 .info dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---------- 型番選択モーダル (複数パラメーターの2次元タイル選択) ---------- */
+.version-modal-trigger {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 20px;
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow: auto;
+  padding: 14px 16px;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.modal-grid {
+  display: grid;
+  gap: 4px;
+}
+.modal-tile {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 10px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  min-width: 56px;
+  line-height: 1.3;
+}
+.modal-tile:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.modal-tile[aria-checked="true"] {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.modal-tile:disabled {
+  visibility: hidden;
+}
+.modal-axis-label {
+  font-size: 10.5px;
+  color: var(--text-sub);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* ---------- モバイル ---------- */
 @media (max-width: 760px) {
@@ -499,7 +578,12 @@ textarea:focus, select:focus, input:focus-visible,
   .site-title { font-size: 13px; }
   .tabs-vertical { flex-direction: row; flex-wrap: wrap; gap: 8px; }
   .tab-group { flex-direction: row; }
-  .right-menu-zone { display: none; }
+  .right-menu-zone {
+    flex: 0 0 auto;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: 8px 10px;
+  }
   .tab { padding: 2px 8px; font-size: 11.5px; }
   .center-content-zone.layout {
     flex-direction: column;
