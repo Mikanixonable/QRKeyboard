@@ -504,40 +504,66 @@ textarea:focus, select:focus, input:focus-visible,
 .tile-grid-2d .tile { font-size: 9px; padding: 3px 0; }
 .tile-grid-2d .tile:disabled { visibility: hidden; opacity: 1; }
 
-/* ---------- モバイル ---------- */
+/* ---------- モバイル ----------
+   デスクトップは3ゾーンを横並び・site-body 内スクロールで「1画面完結」を
+   狙うが、モバイル幅ではその前提が成立しないため、上から
+   左メニュー(規格選択)→中央(データ入力・コード表示)→右メニュー(詳細設定)
+   の縦1カラムに組み替え、ページ全体を素直に縦スクロールさせる。 */
 @media (max-width: 760px) {
   body { font-size: 13px; }
-  .site-body { flex-direction: column; overflow-y: auto; }
-  .left-menu-zone {
-    flex: 0 0 auto;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 4px 8px;
-    padding: 6px 10px 4px;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
+  .site-body {
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
     overflow-y: visible;
   }
-  .site-title { font-size: 13px; }
-  .tabs-vertical { flex-direction: row; flex-wrap: wrap; gap: 8px; }
-  .tab-group { flex-direction: row; }
+  html, body { height: auto; min-height: 100%; overflow-y: auto; }
+
+  .left-menu-zone, .right-menu-zone {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    overflow-y: visible;
+  }
+  .left-menu-zone {
+    padding: 10px 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
   .right-menu-zone {
-    flex: 0 0 auto;
     border-left: none;
     border-top: 1px solid var(--border);
-    padding: 8px 10px;
+    padding: 10px 12px;
   }
-  .tab { padding: 2px 8px; font-size: 11.5px; }
+  .site-title { font-size: 14px; }
+  .tab { padding: 3px 10px; font-size: 12px; }
+
   .center-content-zone.layout {
+    flex: none;
     flex-direction: column;
-    gap: 6px;
-    padding: 0 10px 8px;
+    padding: 10px 12px;
   }
+  .preview { flex: none; gap: 10px; }
+
+  /* データ・色は縦並びに */
+  .content-top { flex-direction: column; gap: 10px; }
+
+  /* QR 表示域は残り高さを埋めるのではなく、幅基準の正方形として確保する */
+  .content-middle { flex: none; }
+  .qr-frame {
+    flex: none;
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+  }
+
+  .content-bottom { min-height: 0; }
+  .version-box { min-height: 0; }
+
   textarea { padding: 5px 8px; }
   #data-input { height: 2.8em; }
-  .seg-btn { min-width: 36px; padding: 2px 0; font-size: 12px; }
-  .preview { flex: 1; min-height: 100px; gap: 4px; }
+  .seg-btn { min-width: 36px; padding: 4px 0; font-size: 12px; }
   .info { padding: 4px 10px; gap: 1px 12px; font-size: 11px; }
 }
 
