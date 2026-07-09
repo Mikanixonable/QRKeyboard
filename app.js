@@ -1254,6 +1254,235 @@
     syncUrl();
   });
 
+  /* ---------- 読み取り (カメラ / 画像) ---------- */
+  /* デコード自体は ZXing (https://github.com/zxing-js/library) に委譲する。
+     自前の decode() は「完璧なモジュール格子」を前提にしており、二値化・
+     ファインダーパターン検出・遠近補正・グリッドサンプリングは行っていないため。 */
+
+  const scanVideo = $("scan-video");
+  const scanStatus = $("scan-status");
+  const scanCameraBtn = $("scan-camera-btn");
+  const scanImageBtn = $("scan-image-btn");
+  const scanStopBtn = $("scan-stop-btn");
+  const scanFileInput = $("scan-file-input");
+  const zxingAvailable = typeof ZXing !== "undefined";
+  const zxingReader = zxingAvailable ? new ZXing.MultiFormatReader() : null;
+  if (zxingReader) {
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    zxingReader.setHints(hints);
+  }
+
+  /* ZXing が報告するバーコード形式 → このアプリの規格・シンボロジーへの対応
+     (マイクロQR・rMQRは ZXing 非対応のため読み取れない) */
+  function mapZXingFormat(format) {
+    if (!zxingAvailable) return null;
+    const F = ZXing.BarcodeFormat;
+    if (format === F.QR_CODE) return { std: "qr" };
+    if (format === F.DATA_MATRIX) return { std: "datamatrix" };
+    if (format === F.AZTEC) return { std: "aztec" };
+    if (format === F.CODE_128) return { std: "barcode", symbology: "code128" };
+    if (format === F.CODE_39) return { std: "barcode", symbology: "code39" };
+    if (format === F.EAN_13) return { std: "barcode", symbology: "ean13" };
+    return null;
+  }
+
+  function decodeCanvas(offCanvas) {
+    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
+    const binarizer = new ZXing.HybridBinarizer(luminanceSource);
+    const bitmap = new ZXing.BinaryBitmap(binarizer);
+    return zxingReader.decode(bitmap);
+  }
+
+  function scaleCanvasTo(source, maxDim) {
+    const scale = maxDim / Math.max(source.width, source.height);
+    if (scale >= 1) return source;
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.round(source.width * scale));
+    out.height = Math.max(1, Math.round(source.height * scale));
+    out.getContext("2d").drawImage(source, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  /* ZXing は非常に大きくフラットなモジュール (このアプリ自身が生成した画像の
+     再取り込みなど) だと検出に失敗することがあるため、段階的に縮小して再試行する */
+  function decodeCanvasWithFallback(sourceCanvas, sizes) {
+    let lastErr = null;
+    for (const maxDim of sizes) {
+      const target = maxDim ? scaleCanvasTo(sourceCanvas, maxDim) : sourceCanvas;
+      try {
+        return { result: decodeCanvas(target), canvas: target };
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  }
+
+  /* 読み取ったコードの明暗モジュールの平均色を、背景色・本体色として採用する */
+  function sampleScanColors(offCanvas, points) {
+    if (!points || points.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      const x = p.getX(), y = p.getY();
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    }
+    const padX = (maxX - minX) * 0.08, padY = (maxY - minY) * 0.08;
+    const x0 = Math.max(0, Math.floor(minX - padX));
+    const y0 = Math.max(0, Math.floor(minY - padY));
+    const w = Math.min(offCanvas.width - x0, Math.ceil(maxX - minX + padX * 2));
+    const h = Math.min(offCanvas.height - y0, Math.ceil(maxY - minY + padY * 2));
+    if (w < 1 || h < 1) return null;
+    const data = offCanvas.getContext("2d").getImageData(x0, y0, w, h).data;
+    const lums = new Float32Array(data.length / 4);
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      lums[j] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    }
+    const sorted = Array.from(lums).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const dark = [0, 0, 0], light = [0, 0, 0];
+    let darkN = 0, lightN = 0;
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      const target = lums[j] < median ? dark : light;
+      target[0] += data[i]; target[1] += data[i + 1]; target[2] += data[i + 2];
+      if (lums[j] < median) darkN++; else lightN++;
+    }
+    const toHex = (sum, n) => {
+      if (n === 0) return null;
+      return `#${[sum[0], sum[1], sum[2]].map((v) => Math.round(v / n).toString(16).padStart(2, "0")).join("")}`;
+    };
+    return { fg: toHex(dark, darkN), bg: toHex(light, lightN) };
+  }
+
+  function setScanStatus(text, isError) {
+    scanStatus.textContent = text;
+    scanStatus.classList.toggle("error", !!isError);
+  }
+
+  function handleScanResult(result, offCanvas) {
+    const format = result.getBarcodeFormat();
+    const text = result.getText();
+    const mapping = mapZXingFormat(format);
+    const colors = sampleScanColors(offCanvas, result.getResultPoints());
+    if (colors) {
+      if (colors.fg) state.fg = colors.fg;
+      if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
+      $("color-fg").value = state.fg;
+      $("color-bg").value = state.bg;
+      $("color-outer").value = state.outerBg;
+      $("color-outer").disabled = state.outerSame;
+      $("color-outer-same").checked = state.outerSame;
+    }
+    dataInput.value = text;
+    if (mapping) {
+      if (mapping.symbology) state.barcode.symbology = mapping.symbology;
+      setScanStatus(`読み取り成功 (${ZXing.BarcodeFormat[format]})`);
+      selectStandard(mapping.std);
+    } else {
+      setScanStatus(`読み取り成功 (このツールでは非対応の形式: ${ZXing.BarcodeFormat[format]})`, true);
+      render();
+    }
+  }
+
+  let scanStream = null;
+  let scanRAF = null;
+
+  function stopCameraScan() {
+    if (scanRAF != null) cancelAnimationFrame(scanRAF);
+    scanRAF = null;
+    if (scanStream) {
+      scanStream.getTracks().forEach((t) => t.stop());
+      scanStream = null;
+    }
+    scanVideo.hidden = true;
+    scanVideo.srcObject = null;
+    scanStopBtn.hidden = true;
+    scanCameraBtn.hidden = false;
+    scanImageBtn.hidden = false;
+    render();
+  }
+
+  async function startCameraScan() {
+    if (!zxingAvailable) {
+      setScanStatus("読み取り機能を読み込めませんでした (ネットワーク接続を確認してください)", true);
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setScanStatus("このブラウザではカメラを利用できません", true);
+      return;
+    }
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    } catch (e) {
+      setScanStatus(`カメラを起動できませんでした: ${e.message}`, true);
+      return;
+    }
+    scanVideo.srcObject = scanStream;
+    await scanVideo.play();
+    canvas.hidden = true;
+    qrMessage.hidden = true;
+    editReset.hidden = true;
+    scanVideo.hidden = false;
+    scanStopBtn.hidden = false;
+    scanCameraBtn.hidden = true;
+    scanImageBtn.hidden = true;
+    setScanStatus("コードにカメラを向けてください…");
+
+    const off = document.createElement("canvas");
+    const octx = off.getContext("2d", { willReadFrequently: true });
+    const loop = () => {
+      if (!scanStream) return;
+      if (scanVideo.videoWidth > 0) {
+        off.width = scanVideo.videoWidth;
+        off.height = scanVideo.videoHeight;
+        octx.drawImage(scanVideo, 0, 0);
+        try {
+          const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, [null, 400]);
+          stopCameraScan();
+          handleScanResult(result, decodedCanvas);
+          return;
+        } catch (e) {
+          // このフレームでは見つからなかった。次のフレームで再試行する
+        }
+      }
+      scanRAF = requestAnimationFrame(loop);
+    };
+    scanRAF = requestAnimationFrame(loop);
+  }
+
+  function decodeImageFile(file) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const off = document.createElement("canvas");
+      off.width = img.naturalWidth;
+      off.height = img.naturalHeight;
+      off.getContext("2d").drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      try {
+        const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, [null, 640, 400, 300, 200, 120]);
+        handleScanResult(result, decodedCanvas);
+      } catch (e) {
+        setScanStatus("コードが見つかりませんでした", true);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setScanStatus("画像を読み込めませんでした", true);
+    };
+    img.src = url;
+  }
+
+  scanCameraBtn.addEventListener("click", startCameraScan);
+  scanStopBtn.addEventListener("click", stopCameraScan);
+  scanImageBtn.addEventListener("click", () => scanFileInput.click());
+  scanFileInput.addEventListener("change", (ev) => {
+    const file = ev.target.files[0];
+    if (file) decodeImageFile(file);
+    ev.target.value = "";
+  });
+
   /* ---------- タブ切り替え ---------- */
 
   function selectStandard(std) {

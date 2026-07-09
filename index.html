@@ -249,9 +249,17 @@
         </div>
 
         <div class="content-middle" id="qr-zone">
+          <div class="scan-toolbar">
+            <button type="button" class="small-button" id="scan-camera-btn">📷 カメラで読み取り</button>
+            <button type="button" class="small-button" id="scan-image-btn">🖼 画像を選択</button>
+            <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
+            <input type="file" id="scan-file-input" accept="image/*" hidden>
+            <span class="scan-status" id="scan-status"></span>
+          </div>
           <div class="qr-frame">
             <div class="qr-card" id="qr-card">
               <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>
+              <video id="scan-video" hidden playsinline muted aria-label="カメラ映像"></video>
               <p class="qr-message" id="qr-message" hidden></p>
               <button type="button" class="small-button edit-reset" id="edit-reset" hidden>編集をリセット</button>
             </div>
@@ -313,6 +321,7 @@
 
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script src="qrcode.js"></script>
   <script src="datamatrix.js"></script>
   <script src="aztec.js"></script>
