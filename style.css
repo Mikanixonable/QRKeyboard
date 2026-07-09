@@ -173,7 +173,6 @@ body {
   line-height: 1.35;
   color: var(--text-sub);
 }
-.tab-rich[aria-selected="true"] .tab-rich-desc { color: rgba(255, 255, 255, 0.85); }
 .tab-rich-icon {
   flex: none;
   width: 32px;
@@ -181,10 +180,8 @@ body {
   fill: var(--text-sub);
   opacity: 0.7;
 }
-.tab-rich[aria-selected="true"] .tab-rich-badge,
-.tab-rich[aria-selected="true"] .tab-rich-icon { fill: #fff; }
-.tab-rich[aria-selected="true"] .tab-rich-icon { opacity: 0.95; }
-.tab-rich-icon-wide { width: 40px; height: 13.5px; }
+.tab-rich[aria-selected="true"] .tab-rich-desc { color: rgba(255, 255, 255, 0.85); }
+.tab-rich[aria-selected="true"] .tab-rich-badge { fill: #fff; }
 
 /* アイコン内の「抜き」部分: 通常時はカード背景色、選択時はボタン背景 (アクセント色) に同化させて穴として見せる */
 .icon-gap { fill: var(--surface); }
@@ -304,6 +301,7 @@ textarea:focus, select:focus, input:focus-visible,
   color: var(--accent2);
 }
 .seg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.seg-btn-full { flex: 1 0 100%; }
 .seg-note {
   font-size: 11px;
   color: var(--text-sub);
@@ -319,37 +317,6 @@ textarea:focus, select:focus, input:focus-visible,
   flex-direction: column;
   gap: 5px;
   min-height: 28px;
-}
-.version-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.version-line input[type="range"] {
-  flex: 1;
-  accent-color: var(--accent);
-  min-width: 0;
-}
-.version-line select {
-  flex: 1;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  padding: 3px 6px;
-  min-width: 0;
-}
-.version-line .segmented {
-  flex: 1;
-  flex-wrap: nowrap;
-}
-.version-line .segmented .seg-btn {
-  flex: 1 1 0;
-  min-width: 0;
-  padding-left: 2px;
-  padding-right: 2px;
 }
 .auto-toggle {
   display: inline-flex;
@@ -496,6 +463,7 @@ textarea:focus, select:focus, input:focus-visible,
   grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
   gap: 3px;
 }
+.tile-grid .tile-full { grid-column: 1 / -1; }
 .tile {
   border: 1px solid var(--border);
   background: var(--surface);

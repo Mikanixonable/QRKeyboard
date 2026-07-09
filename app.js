@@ -159,26 +159,22 @@
       return;
     }
 
-    const line = document.createElement("div");
-    line.className = "version-line";
     const autoKey = std === "datamatrix" ? "sizeAuto" : "versionAuto";
-    line.appendChild(makeToggle(st[autoKey], (checked) => {
-      st[autoKey] = checked;
+    const setAuto = () => {
+      st[autoKey] = true;
       if (std === "micro") normalizeMicroEc();
       rebuildControls();
       render();
-    }));
+    };
 
     const resolved = current && current.results[0];
 
     if (std === "qr") {
-      box.appendChild(line);
-      const items = [];
+      const items = [{ label: "自動", checked: st.versionAuto, onClick: setAuto, full: true }];
       for (let v = 1; v <= 40; v++) {
         items.push({
           label: String(v),
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
-          disabled: st.versionAuto,
           onClick: () => {
             st.versionAuto = false;
             st.version = v;
@@ -192,6 +188,9 @@
     } else if (std === "micro") {
       const seg = document.createElement("div");
       seg.className = "segmented";
+      const autoBtn = makeSegButton("自動", st.versionAuto, setAuto);
+      autoBtn.classList.add("seg-btn-full");
+      seg.appendChild(autoBtn);
       for (let v = 1; v <= 4; v++) {
         seg.appendChild(makeSegButton(`M${v}`, !st.versionAuto && st.version === v, () => {
           st.versionAuto = false;
@@ -201,39 +200,42 @@
           render();
         }));
       }
-      line.appendChild(seg);
-      box.appendChild(line);
+      box.appendChild(seg);
     } else if (std === "rmqr") {
       // 高さ・幅の2パラメーターで決まるため、最初から2次元タイルを右メニューゾーンに表示する
-      box.appendChild(line);
+      const seg = document.createElement("div");
+      seg.className = "segmented";
+      const autoBtn = makeSegButton("自動", st.versionAuto, setAuto);
+      autoBtn.classList.add("seg-btn-full");
+      seg.appendChild(autoBtn);
+      box.appendChild(seg);
       box.appendChild(buildRmqrTileGrid());
       return;
     } else if (std === "datamatrix") {
-      box.appendChild(line);
-      const items = DMLib.SIZES.map((s, i) => ({
-        label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
-        title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
-        checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
-        disabled: st.sizeAuto,
-        onClick: () => {
-          st.sizeAuto = false;
-          st.size = i + 1;
-          rebuildControls();
-          render();
-        },
-      }));
+      const items = [{ label: "自動", checked: st.sizeAuto, onClick: setAuto, full: true }];
+      DMLib.SIZES.forEach((s, i) => {
+        items.push({
+          label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
+          title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
+          checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
+          onClick: () => {
+            st.sizeAuto = false;
+            st.size = i + 1;
+            rebuildControls();
+            render();
+          },
+        });
+      });
       box.appendChild(makeTileGrid(items, "minmax(38px, 1fr)"));
       return;
     } else if (std === "aztec") {
-      box.appendChild(line);
-      const items = [];
+      const items = [{ label: "自動", checked: st.versionAuto, onClick: setAuto, full: true }];
       for (let l = 1; l <= 4; l++) {
         const dim = 11 + 4 * l;
         items.push({
           label: `C${l}`,
           title: `コンパクト ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === l : st.version === l,
-          disabled: st.versionAuto,
           onClick: () => { st.versionAuto = false; st.version = l; rebuildControls(); render(); },
         });
       }
@@ -246,7 +248,6 @@
           label: `F${l}`,
           title: `フル ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
-          disabled: st.versionAuto,
           onClick: () => { st.versionAuto = false; st.version = v; rebuildControls(); render(); },
         });
       }
@@ -265,7 +266,7 @@
     for (const item of items) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "tile";
+      btn.className = item.full ? "tile tile-full" : "tile";
       btn.setAttribute("role", "radio");
       btn.setAttribute("aria-checked", item.checked ? "true" : "false");
       btn.disabled = !!item.disabled;
@@ -316,7 +317,6 @@
           ? !!resolved && resolved.height === h && resolved.width === w
           : st.height === h && st.width === w;
         btn.setAttribute("aria-checked", isChecked ? "true" : "false");
-        btn.disabled = st.versionAuto;
         btn.title = `R${h} × ${w}`;
         btn.textContent = String(w);
         btn.addEventListener("click", () => {

@@ -257,6 +257,13 @@
                 <span>同じ色にする</span>
               </label>
               <button type="button" class="small-button" id="color-reset">白黒に戻す</button>
+              <div id="content-display-field">
+                <label class="color-item">
+                  <input type="checkbox" id="show-content-toggle" checked>
+                  <span>コード下に内容を表示する</span>
+                </label>
+                <div class="segmented" id="content-placement-control" role="radiogroup" hidden></div>
+              </div>
             </div>
           </div>
         </div>
@@ -282,22 +289,6 @@
             <div id="barcode-text-control"></div>
           </div>
 
-          <div class="field" id="split-mode-field" hidden>
-            <label id="split-mode-label">容量超過時の分割方式</label>
-            <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
-          </div>
-
-          <div class="field" id="content-display-field">
-            <label id="content-display-label">内容表示</label>
-            <div class="color-row">
-              <label class="color-item">
-                <input type="checkbox" id="show-content-toggle" checked>
-                <span>コード下に表示する</span>
-              </label>
-            </div>
-            <div class="segmented" id="content-placement-control" role="radiogroup" hidden></div>
-          </div>
-
           <div class="save-menu" id="save-menu">
             <button type="button" class="small-button" id="save-png">PNG保存</button>
             <button type="button" class="small-button" id="save-svg">SVG保存</button>
@@ -309,6 +300,11 @@
     </main>
 
     <nav class="right-menu-zone" aria-label="右メニューゾーン">
+
+      <div class="field" id="split-mode-field" hidden>
+        <label id="split-mode-label">容量超過時の分割方式</label>
+        <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
+      </div>
 
       <div class="field" id="version-field">
         <label id="version-label">複雑度(型番)</label>
