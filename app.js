@@ -15,6 +15,7 @@
   const contentStatus = $("content-status");
   const editHint = $("edit-hint");
   const editReset = $("edit-reset");
+  const previewToolbar = document.querySelector(".preview-toolbar");
 
   const MODE_NAMES = { numeric: "数字", alphanumeric: "英数字", byte: "バイト (UTF-8)" };
   const QR_FAMILY = ["qr", "micro", "rmqr"];
@@ -44,7 +45,7 @@
     rmqr: { ec: "M", versionAuto: true, height: 11, width: 43 },
     datamatrix: { sizeAuto: true, size: 4 },
     aztec: { ec: 1, versionAuto: true, version: 6 },
-    barcode: { symbology: "code128" },
+    barcode: { symbology: "code128", showText: true },
   };
 
   /* ---------- 共通部品 ---------- */
@@ -60,14 +61,14 @@
     return btn;
   }
 
-  function makeAutoToggle(checked, onChange) {
+  function makeAutoToggle(checked, onChange, text) {
     const label = document.createElement("label");
     label.className = "auto-toggle";
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = checked;
     cb.addEventListener("change", () => onChange(cb.checked));
-    label.append(cb, document.createTextNode("自動"));
+    label.append(cb, document.createTextNode(text || "自動"));
     return label;
   }
 
@@ -171,10 +172,10 @@
       range.disabled = st.versionAuto;
       const value = document.createElement("span");
       value.className = "version-value";
-      value.textContent = st.versionAuto ? "—" : "型番 " + st.version;
+      value.textContent = st.versionAuto ? "—" : `型番 ${st.version}`;
       range.addEventListener("input", () => {
         st.version = Number(range.value);
-        value.textContent = "型番 " + st.version;
+        value.textContent = `型番 ${st.version}`;
         render();
       });
       line.append(range, value);
@@ -183,7 +184,7 @@
       const seg = document.createElement("div");
       seg.className = "segmented";
       for (let v = 1; v <= 4; v++) {
-        seg.appendChild(makeSegButton("M" + v, !st.versionAuto && st.version === v, () => {
+        seg.appendChild(makeSegButton(`M${v}`, !st.versionAuto && st.version === v, () => {
           st.versionAuto = false;
           st.version = v;
           normalizeMicroEc();
@@ -204,7 +205,7 @@
       const hSeg = document.createElement("div");
       hSeg.className = "segmented";
       for (const h of RMQR_HEIGHTS) {
-        const btn = makeSegButton("R" + h, !st.versionAuto && st.height === h, () => {
+        const btn = makeSegButton(`R${h}`, !st.versionAuto && st.height === h, () => {
           st.versionAuto = false;
           st.height = h;
           const widths = rmqrWidthsFor(h);
@@ -226,7 +227,7 @@
       const wSeg = document.createElement("div");
       wSeg.className = "segmented";
       for (const w of rmqrWidthsFor(st.height)) {
-        const btn = makeSegButton("×" + w, !st.versionAuto && st.width === w, () => {
+        const btn = makeSegButton(`×${w}`, !st.versionAuto && st.width === w, () => {
           st.versionAuto = false;
           st.width = w;
           rebuildControls();
@@ -248,7 +249,7 @@
       DMLib.SIZES.forEach((s, i) => {
         const opt = document.createElement("option");
         opt.value = String(i + 1);
-        opt.textContent = DMLib.SIZE_NAMES[i] + " (" + s.data + " 語)";
+        opt.textContent = `${DMLib.SIZE_NAMES[i]} (${s.data} 語)`;
         (s.rect ? rect : sq).appendChild(opt);
       });
       select.append(sq, rect);
@@ -268,7 +269,8 @@
       for (let l = 1; l <= 4; l++) {
         const opt = document.createElement("option");
         opt.value = String(l);
-        opt.textContent = "コンパクト " + l + "層 (" + (11 + 4 * l) + "×" + (11 + 4 * l) + ")";
+        const dim = 11 + 4 * l;
+        opt.textContent = `コンパクト ${l}層 (${dim}×${dim})`;
         compact.appendChild(opt);
       }
       const full = document.createElement("optgroup");
@@ -278,7 +280,7 @@
         opt.value = String(l + 4);
         const dim = 151 - 2 * [66, 64, 62, 60, 57, 55, 53, 51, 49, 47, 45, 42, 40, 38, 36, 34,
           32, 30, 28, 25, 23, 21, 19, 17, 15, 13, 10, 8, 6, 4, 2, 0][l - 1];
-        opt.textContent = "フル " + l + "層 (" + dim + "×" + dim + ")";
+        opt.textContent = `フル ${l}層 (${dim}×${dim})`;
         full.appendChild(opt);
       }
       select.append(compact, full);
@@ -310,7 +312,7 @@
       return;
     }
     box.className = "segmented mask-grid";
-    box.style.gridTemplateColumns = "repeat(" + (std === "qr" ? 8 : 4) + ", 1fr)";
+    box.style.gridTemplateColumns = `repeat(${std === "qr" ? 8 : 4}, 1fr)`;
     box.appendChild(makeSegButton("自動", st.maskAuto, () => {
       st.maskAuto = true;
       rebuildControls();
@@ -333,11 +335,26 @@
     if (!available.includes(st.ec)) st.ec = available[available.length - 1];
   }
 
+  function buildBarcodeTextControl() {
+    const field = $("barcode-text-field");
+    const box = $("barcode-text-control");
+    const std = state.standard;
+    field.hidden = std !== "barcode";
+    if (field.hidden) return;
+    box.textContent = "";
+    const st = state[std];
+    box.appendChild(makeAutoToggle(st.showText, (checked) => {
+      st.showText = checked;
+      render();
+    }, "バーコードの下に数字を表示"));
+  }
+
   function rebuildControls() {
-    $("controls").classList.toggle("other-standard", !QR_FAMILY.includes(state.standard));
+    $("preview").classList.toggle("other-standard", !QR_FAMILY.includes(state.standard));
     buildEcControl();
     buildVersionControl();
     buildMaskControl();
+    buildBarcodeTextControl();
   }
 
   /* ---------- エンコード ---------- */
@@ -377,20 +394,23 @@
     if (!current) return;
     const r = current.result;
     const box = qrCard.getBoundingClientRect();
+    const toolbarH = previewToolbar.getBoundingClientRect().height;
     const dpr = window.devicePixelRatio || 1;
     const availW = Math.max(40, box.width - 24) * dpr;
-    const availH = Math.max(40, box.height - 24) * dpr;
+    const availH = Math.max(40, box.height - 24 - toolbarH) * dpr;
 
     qrCard.style.background = state.bg;
 
     if (r.type === "linear") {
+      const showText = state.barcode.showText;
       const totalW = r.quietLeft + r.width + r.quietRight;
       const scale = Math.max(1, Math.floor(availW / totalW));
-      const barH = Math.max(30 * dpr, Math.min(availH - 8 * dpr, Math.round(totalW * scale * 0.3)));
+      const textH = showText ? Math.round(16 * scale) : 0;
+      const barH = Math.max(30 * dpr, Math.min(availH - 8 * dpr - textH, Math.round(totalW * scale * 0.3)));
       canvas.width = totalW * scale;
-      canvas.height = barH + 16 * scale;
-      canvas.style.width = canvas.width / dpr + "px";
-      canvas.style.height = canvas.height / dpr + "px";
+      canvas.height = barH + 16 * scale + textH;
+      canvas.style.width = `${canvas.width / dpr}px`;
+      canvas.style.height = `${canvas.height / dpr}px`;
       ctx.fillStyle = state.bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = state.fg;
@@ -398,6 +418,12 @@
         if (r.pattern[x]) {
           ctx.fillRect((r.quietLeft + x) * scale, 8 * scale, scale, barH);
         }
+      }
+      if (showText) {
+        ctx.font = `${Math.round(12 * scale)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(r.display, canvas.width / 2, barH + 8 * scale + 2 * scale, totalW * scale);
       }
       lastDraw = null;
       return;
@@ -409,8 +435,8 @@
     const scale = Math.max(1, Math.floor(Math.min(availW / mw, availH / mh)));
     canvas.width = mw * scale;
     canvas.height = mh * scale;
-    canvas.style.width = canvas.width / dpr + "px";
-    canvas.style.height = canvas.height / dpr + "px";
+    canvas.style.width = `${canvas.width / dpr}px`;
+    canvas.style.height = `${canvas.height / dpr}px`;
     ctx.fillStyle = state.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = state.fg;
@@ -442,7 +468,7 @@
         const d = QRLib.decode(current.modules, std);
         contentText.textContent = d.text === "" ? "(空)" : d.text;
         if (d.corrected > 0) {
-          contentStatus.textContent = "誤り訂正で " + d.corrected + " コード語を復元";
+          contentStatus.textContent = `誤り訂正で ${d.corrected} コード語を復元`;
           contentStatus.classList.add("corrected");
         } else {
           contentStatus.textContent = current.edited ? "訂正なしで一致" : "";
@@ -457,7 +483,7 @@
       contentLabel.textContent = "内容";
       contentText.textContent = r.display;
       contentStatus.textContent = r.symbology === "ean13" && dataInput.value.length === 12
-        ? "検査数字 " + r.display[12] + " を付加" : "";
+        ? `検査数字 ${r.display[12]} を付加` : "";
     } else {
       contentLabel.textContent = "内容";
       contentText.textContent = dataInput.value;
@@ -474,30 +500,30 @@
     const st = state[std];
     const r = current.result;
     const items = [];
-    const sizeText = r.width + "×" + r.height;
+    const sizeText = `${r.width}×${r.height}`;
 
     if (std === "qr" || std === "micro" || std === "rmqr") {
       const auto = st.versionAuto ? "自動 → " : "";
-      items.push(["型番", auto + (std === "qr" ? r.version : r.versionName) + " (" + sizeText + ")"]);
+      items.push(["型番", `${auto}${std === "qr" ? r.version : r.versionName} (${sizeText})`]);
       items.push(["モード", MODE_NAMES[r.mode]]);
       items.push(["誤り訂正", std === "micro" && r.version === 1 ? "M1 (誤り検出のみ)" : r.ecLevel]);
       if (r.mask == null) items.push(["マスク", "固定"]);
-      else items.push(["マスク", (st.maskAuto ? "自動 → " : "") + r.mask]);
-      items.push(["データ", r.usedBits + " / " + r.capacityBits + " bit"]);
-      items.push(["コード語", "データ " + r.dataCodewords + " + 訂正 " + (r.totalCodewords - r.dataCodewords)]);
+      else items.push(["マスク", `${st.maskAuto ? "自動 → " : ""}${r.mask}`]);
+      items.push(["データ", `${r.usedBits} / ${r.capacityBits} bit`]);
+      items.push(["コード語", `データ ${r.dataCodewords} + 訂正 ${r.totalCodewords - r.dataCodewords}`]);
     } else if (std === "datamatrix") {
-      items.push(["サイズ", (st.sizeAuto ? "自動 → " : "") + r.versionName]);
-      items.push(["データ", r.usedCodewords + " / " + r.dataCodewords + " 語"]);
+      items.push(["サイズ", `${st.sizeAuto ? "自動 → " : ""}${r.versionName}`]);
+      items.push(["データ", `${r.usedCodewords} / ${r.dataCodewords} 語`]);
       items.push(["訂正コード語", String(r.eccCodewords)]);
       items.push(["方式", "ECC 200"]);
     } else if (std === "aztec") {
-      items.push(["サイズ", (st.versionAuto ? "自動 → " : "") + r.versionName]);
-      items.push(["データ", r.usedBits + " / " + r.capacityBits + " bit"]);
-      items.push(["コード語", "データ " + r.dataCodewords + " + 訂正 " + r.eccCodewords + " (" + r.codewordBits + "bit語)"]);
-      items.push(["実効訂正率", r.eccPercent + "%"]);
+      items.push(["サイズ", `${st.versionAuto ? "自動 → " : ""}${r.versionName}`]);
+      items.push(["データ", `${r.usedBits} / ${r.capacityBits} bit`]);
+      items.push(["コード語", `データ ${r.dataCodewords} + 訂正 ${r.eccCodewords} (${r.codewordBits}bit語)`]);
+      items.push(["実効訂正率", `${r.eccPercent}%`]);
     } else if (std === "barcode") {
       items.push(["種類", r.versionName]);
-      items.push(["幅", r.width + " モジュール"]);
+      items.push(["幅", `${r.width} モジュール`]);
     }
     for (const [dt, dd] of items) {
       const div = document.createElement("div");
@@ -592,7 +618,7 @@
   }
 
   function filenameBase() {
-    return "code-" + state.standard;
+    return `code-${state.standard}`;
   }
 
   $("save-png").addEventListener("click", () => {
@@ -601,16 +627,24 @@
     const off = document.createElement("canvas");
     const octx = off.getContext("2d");
     if (r.type === "linear") {
+      const showText = state.barcode.showText;
       const scale = 4;
       const totalW = r.quietLeft + r.width + r.quietRight;
       const barH = Math.max(120, Math.round(totalW * scale * 0.3));
+      const textH = showText ? 48 : 0;
       off.width = totalW * scale;
-      off.height = barH + 40;
+      off.height = barH + 40 + textH;
       octx.fillStyle = state.bg;
       octx.fillRect(0, 0, off.width, off.height);
       octx.fillStyle = state.fg;
       for (let x = 0; x < r.width; x++) {
         if (r.pattern[x]) octx.fillRect((r.quietLeft + x) * scale, 20, scale, barH);
+      }
+      if (showText) {
+        octx.font = "36px monospace";
+        octx.textAlign = "center";
+        octx.textBaseline = "top";
+        octx.fillText(r.display, off.width / 2, barH + 24, off.width);
       }
     } else {
       const qz = r.quietZone;
@@ -627,7 +661,7 @@
         }
       }
     }
-    off.toBlob((blob) => blob && download(blob, filenameBase() + ".png"), "image/png");
+    off.toBlob((blob) => blob && download(blob, `${filenameBase()}.png`), "image/png");
   });
 
   $("save-svg").addEventListener("click", () => {
@@ -635,23 +669,29 @@
     const r = current.result;
     let svg;
     if (r.type === "linear") {
+      const showText = state.barcode.showText;
       const totalW = r.quietLeft + r.width + r.quietRight;
       const barH = Math.max(30, Math.round(totalW * 0.3));
-      const totalH = barH + 10;
+      const textH = showText ? 14 : 0;
+      const totalH = barH + 10 + textH;
       let rects = "";
       let x = 0;
       while (x < r.width) {
         if (r.pattern[x]) {
           let run = 1;
           while (x + run < r.width && r.pattern[x + run]) run++;
-          rects += '<rect x="' + (r.quietLeft + x) + '" y="5" width="' + run + '" height="' + barH + '"/>';
+          rects += `<rect x="${r.quietLeft + x}" y="5" width="${run}" height="${barH}"/>`;
           x += run;
         } else x++;
       }
-      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + totalW + " " + totalH +
-        '" width="' + totalW * 4 + '" height="' + totalH * 4 + '" shape-rendering="crispEdges">' +
-        '<rect width="100%" height="100%" fill="' + state.bg + '"/><g fill="' + state.fg + '">' +
-        rects + "</g></svg>";
+      const escapeXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const text = showText
+        ? `<text x="${totalW / 2}" y="${barH + 8 + textH}" font-family="monospace" ` +
+          `font-size="${textH}" text-anchor="middle">${escapeXml(r.display)}</text>`
+        : "";
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" ` +
+        `width="${totalW * 4}" height="${totalH * 4}" shape-rendering="crispEdges">` +
+        `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}${text}</g></svg>`;
     } else {
       const qz = r.quietZone;
       const mw = r.width + qz * 2, mh = r.height + qz * 2;
@@ -662,17 +702,16 @@
           if (current.modules[y][x]) {
             let run = 1;
             while (x + run < r.width && current.modules[y][x + run]) run++;
-            rects += '<rect x="' + (x + qz) + '" y="' + (y + qz) + '" width="' + run + '" height="1"/>';
+            rects += `<rect x="${x + qz}" y="${y + qz}" width="${run}" height="1"/>`;
             x += run;
           } else x++;
         }
       }
-      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + mw + " " + mh +
-        '" width="' + mw * 10 + '" height="' + mh * 10 + '" shape-rendering="crispEdges">' +
-        '<rect width="100%" height="100%" fill="' + state.bg + '"/><g fill="' + state.fg + '">' +
-        rects + "</g></svg>";
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${mw} ${mh}" ` +
+        `width="${mw * 10}" height="${mh * 10}" shape-rendering="crispEdges">` +
+        `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}</g></svg>`;
     }
-    download(new Blob([svg], { type: "image/svg+xml" }), filenameBase() + ".svg");
+    download(new Blob([svg], { type: "image/svg+xml" }), `${filenameBase()}.svg`);
   });
 
   /* ---------- 色 ---------- */
