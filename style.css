@@ -10,8 +10,10 @@
   --border: #d9dde3;
   --accent: #1a56c4;        /* QR 系 */
   --accent-weak: #e3ecfb;
-  --accent2: #0e7a5f;       /* 非 QR 系 */
+  --accent2: #0e7a5f;       /* 二次元コード (QR 以外) */
   --accent2-weak: #dcf2ec;
+  --accent3: #a9660b;       /* 一次元コード */
+  --accent3-weak: #f6ead2;
   --danger: #b3261e;
   --radius: 10px;
 }
@@ -26,6 +28,8 @@
     --accent-weak: #263650;
     --accent2: #4fc3a1;
     --accent2-weak: #1d3a32;
+    --accent3: #e0ab5c;
+    --accent3-weak: #3a2f1d;
     --danger: #f2827b;
   }
 }
@@ -79,7 +83,19 @@ body {
 .tabs-vertical {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
+}
+.tab-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tab-category-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.06em;
+  padding: 0 2px;
 }
 .tab-group {
   display: flex;
@@ -104,10 +120,66 @@ body {
   text-align: left;
 }
 .tab:hover:not([aria-selected="true"]) { color: var(--text); }
+.tab-group-qr { --tab-accent: var(--accent); }
 .tab-group-qr .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
-/* 非QR系は色を変えて分離 */
-.tab-group-other { border-color: var(--accent2); }
+/* 二次元コード (QR 以外) は色を変えて分離 */
+.tab-group-other { border-color: var(--accent2); --tab-accent: var(--accent2); }
 .tab-group-other .tab[aria-selected="true"] { background: var(--accent2); color: #fff; }
+/* 一次元コードはさらに別の色で分離 */
+.tab-group-barcode { border-color: var(--accent3); --tab-accent: var(--accent3); }
+.tab-group-barcode .tab[aria-selected="true"] { background: var(--accent3); color: #fff; }
+
+/* QR系タブ: サブスクプラン風のリッチなカードボタン */
+.tab-rich {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 56px;
+  padding: 8px 10px;
+  white-space: normal;
+}
+.tab-rich-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tab-rich-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.tab-rich-badge {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  fill: var(--text-sub);
+}
+.tab-rich-desc {
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-sub);
+}
+.tab-rich[aria-selected="true"] .tab-rich-desc { color: rgba(255, 255, 255, 0.85); }
+.tab-rich-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  fill: var(--text-sub);
+  opacity: 0.7;
+}
+.tab-rich[aria-selected="true"] .tab-rich-badge,
+.tab-rich[aria-selected="true"] .tab-rich-icon { fill: #fff; }
+.tab-rich[aria-selected="true"] .tab-rich-icon { opacity: 0.95; }
+.tab-rich-icon-wide { width: 40px; height: 13.5px; }
+
+/* アイコン内の「抜き」部分: 通常時はカード背景色、選択時はボタン背景 (アクセント色) に同化させて穴として見せる */
+.icon-gap { fill: var(--surface); }
+.tab-rich[aria-selected="true"] .icon-gap { fill: var(--tab-accent); }
 
 /* ---------- 右メニューゾーン ---------- */
 .right-menu-zone {
@@ -144,6 +216,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.qr-frame {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .content-bottom {
   display: flex;
@@ -318,8 +399,9 @@ textarea:focus, select:focus, input:focus-visible,
 }
 
 .qr-card {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
   display: flex;
   flex-direction: column;
   align-items: center;
