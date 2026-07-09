@@ -75,10 +75,19 @@ body {
   overflow-y: auto;
 }
 .site-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
+}
+.site-title-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: var(--text);
 }
 .tabs-vertical {
   display: flex;
@@ -237,8 +246,8 @@ body {
   flex: none;
   gap: 10px;
   /* 規格によって表示項目数が変わっても QR 表示域の大きさが変化しないよう、
-     全規格中で最大の高さ (QR: 分割方式の行を含む) に固定する */
-  min-height: 292px;
+     全規格中で最大の高さ (QR: 分割方式・内容表示の行を含む) に固定する */
+  min-height: 168px;
 }
 
 /* ---------- 入力コントロール ---------- */
@@ -436,42 +445,6 @@ textarea:focus, select:focus, input:focus-visible,
   padding: 0 20px;
 }
 
-.content-bar {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 5px 14px;
-  font-size: 12.5px;
-  min-width: 0;
-}
-.content-label {
-  flex: none;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-sub);
-  letter-spacing: 0.04em;
-}
-.content-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-.content-text.unreadable { color: var(--danger); }
-.content-status {
-  flex: none;
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-sub);
-  white-space: nowrap;
-}
-.content-status.corrected { color: var(--accent2); font-weight: 700; }
-.content-status.error { color: var(--danger); font-weight: 700; }
-
 .info {
   display: flex;
   flex-wrap: wrap;
@@ -595,7 +568,6 @@ textarea:focus, select:focus, input:focus-visible,
   .seg-btn { min-width: 36px; padding: 2px 0; font-size: 12px; }
   .preview { flex: 1; min-height: 100px; gap: 4px; }
   .info { padding: 4px 10px; gap: 1px 12px; font-size: 11px; }
-  .content-bar { padding: 4px 10px; font-size: 11.5px; }
 }
 
 /* 高さの低い横向きモバイルなど */

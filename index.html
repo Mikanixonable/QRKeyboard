@@ -1,142 +1,217 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>QRKeyboard</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='white'/><path fill='black' d='M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z'/></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='white'/><path fill='black' d='M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z'/></svg>">
 </head>
+
 <body>
   <div class="site-body">
-    <nav class="left-menu-zone" aria-label="メニュー">
-      <h1 class="site-title">QRKeyboard</h1>
+    <nav class="left-menu-zone" aria-label="左メニューゾーン">
+      <h1 class="site-title">
+        <svg class="site-title-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <rect width="16" height="16" fill="none" />
+          <path
+            d="M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z" />
+        </svg>
+        QRKeyboard
+      </h1>
       <div class="tabs-vertical" role="tablist" aria-label="コード規格">
-      <div class="tab-category" data-category="2d">
-        <div class="tab-category-label">二次元コード</div>
-        <div class="tab-group tab-group-qr" aria-label="QRコード系">
-          <button class="tab tab-rich" role="tab" data-standard="qr" aria-selected="true">
-            <div class="tab-rich-main">
-              <div class="tab-rich-title">
-                <svg class="tab-rich-badge" viewBox="0 0 16 16"><rect width="16" height="16" fill="none"/><path d="M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z"/></svg>
-                <span>QR</span>
+        <div class="tab-category" data-category="2d">
+          <div class="tab-category-label">二次元コード</div>
+          <div class="tab-group tab-group-qr" aria-label="QRコード系">
+            <button class="tab tab-rich" role="tab" data-standard="qr" aria-selected="true">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect width="16" height="16" fill="none" />
+                    <path
+                      d="M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z" />
+                  </svg>
+                  <span>QR</span>
+                </div>
+                <p class="tab-rich-desc">型番1〜40・最大4296英数字・正方形</p>
               </div>
-              <p class="tab-rich-desc">型番1〜40・最大4296英数字・正方形</p>
-            </div>
-            <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
-              <rect x="0" y="0" width="7" height="7"/><rect x="2" y="2" width="3" height="3" class="icon-gap"/>
-              <rect x="14" y="0" width="7" height="7"/><rect x="16" y="2" width="3" height="3" class="icon-gap"/>
-              <rect x="0" y="14" width="7" height="7"/><rect x="2" y="16" width="3" height="3" class="icon-gap"/>
-              <rect x="9" y="0" width="2" height="2"/><rect x="12" y="0" width="2" height="2"/>
-              <rect x="9" y="3" width="2" height="2"/><rect x="9" y="9" width="2" height="2"/>
-              <rect x="12" y="9" width="2" height="2"/><rect x="15" y="9" width="2" height="2"/>
-              <rect x="9" y="12" width="2" height="2"/><rect x="17" y="12" width="2" height="2"/>
-              <rect x="9" y="15" width="2" height="2"/><rect x="9" y="18" width="2" height="2"/>
-              <rect x="12" y="15" width="2" height="2"/><rect x="15" y="18" width="2" height="2"/>
-              <rect x="17" y="16" width="2" height="2"/>
-            </svg>
-          </button>
-          <button class="tab tab-rich" role="tab" data-standard="micro" aria-selected="false">
-            <div class="tab-rich-main">
-              <div class="tab-rich-title">
-                <svg class="tab-rich-badge" viewBox="0 0 16 16"><rect x="1" y="1" width="10" height="10"/><rect x="3" y="3" width="6" height="6" class="icon-gap"/><rect x="5" y="5" width="2" height="2"/></svg>
-                <span>マイクロQR</span>
+              <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
+                <rect x="0" y="0" width="7" height="7" />
+                <rect x="2" y="2" width="3" height="3" class="icon-gap" />
+                <rect x="14" y="0" width="7" height="7" />
+                <rect x="16" y="2" width="3" height="3" class="icon-gap" />
+                <rect x="0" y="14" width="7" height="7" />
+                <rect x="2" y="16" width="3" height="3" class="icon-gap" />
+                <rect x="9" y="0" width="2" height="2" />
+                <rect x="12" y="0" width="2" height="2" />
+                <rect x="9" y="3" width="2" height="2" />
+                <rect x="9" y="9" width="2" height="2" />
+                <rect x="12" y="9" width="2" height="2" />
+                <rect x="15" y="9" width="2" height="2" />
+                <rect x="9" y="12" width="2" height="2" />
+                <rect x="17" y="12" width="2" height="2" />
+                <rect x="9" y="15" width="2" height="2" />
+                <rect x="9" y="18" width="2" height="2" />
+                <rect x="12" y="15" width="2" height="2" />
+                <rect x="15" y="18" width="2" height="2" />
+                <rect x="17" y="16" width="2" height="2" />
+              </svg>
+            </button>
+            <button class="tab tab-rich" role="tab" data-standard="micro" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect x="1" y="1" width="10" height="10" />
+                    <rect x="3" y="3" width="6" height="6" class="icon-gap" />
+                    <rect x="5" y="5" width="2" height="2" />
+                  </svg>
+                  <span>マイクロQR</span>
+                </div>
+                <p class="tab-rich-desc">M1〜M4・最大35文字・正方形(小)</p>
               </div>
-              <p class="tab-rich-desc">M1〜M4・最大35文字・正方形(小)</p>
-            </div>
-            <svg class="tab-rich-icon" viewBox="0 0 13 13" aria-hidden="true">
-              <rect x="0" y="0" width="7" height="7"/><rect x="2" y="2" width="3" height="3" class="icon-gap"/>
-              <rect x="9" y="0" width="2" height="2"/><rect x="9" y="3" width="2" height="2"/>
-              <rect x="0" y="9" width="2" height="2"/><rect x="3" y="9" width="2" height="2"/>
-              <rect x="9" y="9" width="2" height="2"/><rect x="9" y="6" width="2" height="2"/>
-              <rect x="6" y="9" width="2" height="2"/><rect x="11" y="11" width="2" height="2"/>
-            </svg>
-          </button>
-          <button class="tab tab-rich" role="tab" data-standard="rmqr" aria-selected="false">
-            <div class="tab-rich-main">
-              <div class="tab-rich-title">
-                <svg class="tab-rich-badge" viewBox="0 0 16 10"><rect x="0" y="0" width="7" height="7"/><rect x="2" y="2" width="3" height="3" class="icon-gap"/><rect x="9" y="0" width="7" height="7"/><rect x="11" y="2" width="3" height="3" class="icon-gap"/></svg>
-                <span>rMQR</span>
+              <svg class="tab-rich-icon" viewBox="0 0 13 13" aria-hidden="true">
+                <rect x="0" y="0" width="7" height="7" />
+                <rect x="2" y="2" width="3" height="3" class="icon-gap" />
+                <rect x="9" y="0" width="2" height="2" />
+                <rect x="9" y="3" width="2" height="2" />
+                <rect x="0" y="9" width="2" height="2" />
+                <rect x="3" y="9" width="2" height="2" />
+                <rect x="9" y="9" width="2" height="2" />
+                <rect x="9" y="6" width="2" height="2" />
+                <rect x="6" y="9" width="2" height="2" />
+                <rect x="11" y="11" width="2" height="2" />
+              </svg>
+            </button>
+            <button class="tab tab-rich" role="tab" data-standard="rmqr" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 10">
+                    <rect x="0" y="0" width="7" height="7" />
+                    <rect x="2" y="2" width="3" height="3" class="icon-gap" />
+                    <rect x="9" y="0" width="7" height="7" />
+                    <rect x="11" y="2" width="3" height="3" class="icon-gap" />
+                  </svg>
+                  <span>rMQR</span>
+                </div>
+                <p class="tab-rich-desc">R7〜R17・長方形・高密度収納</p>
               </div>
-              <p class="tab-rich-desc">R7〜R17・長方形・高密度収納</p>
-            </div>
-            <svg class="tab-rich-icon tab-rich-icon-wide" viewBox="0 0 27 9" aria-hidden="true">
-              <rect x="0" y="0" width="7" height="7"/><rect x="2" y="2" width="3" height="3" class="icon-gap"/>
-              <rect x="20" y="0" width="7" height="7"/><rect x="22" y="2" width="3" height="3" class="icon-gap"/>
-              <rect x="9" y="0" width="2" height="2"/><rect x="12" y="0" width="2" height="2"/>
-              <rect x="9" y="3" width="2" height="2"/><rect x="15" y="3" width="2" height="2"/>
-              <rect x="12" y="5" width="2" height="2"/><rect x="9" y="6" width="2" height="2"/>
-              <rect x="17" y="6" width="2" height="2"/>
-            </svg>
-          </button>
+              <svg class="tab-rich-icon tab-rich-icon-wide" viewBox="0 0 27 9" aria-hidden="true">
+                <rect x="0" y="0" width="7" height="7" />
+                <rect x="2" y="2" width="3" height="3" class="icon-gap" />
+                <rect x="20" y="0" width="7" height="7" />
+                <rect x="22" y="2" width="3" height="3" class="icon-gap" />
+                <rect x="9" y="0" width="2" height="2" />
+                <rect x="12" y="0" width="2" height="2" />
+                <rect x="9" y="3" width="2" height="2" />
+                <rect x="15" y="3" width="2" height="2" />
+                <rect x="12" y="5" width="2" height="2" />
+                <rect x="9" y="6" width="2" height="2" />
+                <rect x="17" y="6" width="2" height="2" />
+              </svg>
+            </button>
+          </div>
+          <div class="tab-group tab-group-other" aria-label="その他の二次元コード">
+            <button class="tab tab-rich" role="tab" data-standard="datamatrix" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect x="0" y="0" width="2" height="16" />
+                    <rect x="0" y="14" width="16" height="2" />
+                    <rect x="2" y="0" width="2" height="2" />
+                    <rect x="6" y="0" width="2" height="2" />
+                    <rect x="10" y="0" width="2" height="2" />
+                    <rect x="14" y="0" width="2" height="2" />
+                    <rect x="14" y="2" width="2" height="2" />
+                    <rect x="14" y="6" width="2" height="2" />
+                    <rect x="14" y="10" width="2" height="2" />
+                    <rect x="4" y="4" width="2" height="2" />
+                    <rect x="8" y="6" width="2" height="2" />
+                    <rect x="6" y="9" width="2" height="2" />
+                    <rect x="10" y="10" width="2" height="2" />
+                  </svg>
+                  <span>DataMatrix</span>
+                </div>
+                <p class="tab-rich-desc">ECC200・正方形/長方形・高密度収納</p>
+              </div>
+              <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
+                <rect x="0" y="0" width="3" height="21" />
+                <rect x="0" y="18" width="21" height="3" />
+                <rect x="3" y="0" width="3" height="3" />
+                <rect x="9" y="0" width="3" height="3" />
+                <rect x="15" y="0" width="3" height="3" />
+                <rect x="18" y="3" width="3" height="3" />
+                <rect x="18" y="9" width="3" height="3" />
+                <rect x="18" y="15" width="3" height="3" />
+                <rect x="6" y="6" width="3" height="3" />
+                <rect x="12" y="9" width="3" height="3" />
+                <rect x="9" y="12" width="3" height="3" />
+                <rect x="15" y="12" width="3" height="3" />
+                <rect x="6" y="12" width="3" height="3" />
+                <rect x="12" y="15" width="3" height="3" />
+              </svg>
+            </button>
+            <button class="tab tab-rich" role="tab" data-standard="aztec" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect x="0" y="0" width="16" height="16" />
+                    <rect x="2" y="2" width="12" height="12" class="icon-gap" />
+                    <rect x="4" y="4" width="8" height="8" />
+                    <rect x="6" y="6" width="4" height="4" class="icon-gap" />
+                  </svg>
+                  <span>AztecCode</span>
+                </div>
+                <p class="tab-rich-desc">中央にファインダー・正方形・自己完結</p>
+              </div>
+              <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
+                <rect x="0" y="0" width="21" height="21" class="icon-gap" stroke="none" />
+                <rect x="0" y="0" width="21" height="3" />
+                <rect x="0" y="18" width="21" height="3" />
+                <rect x="0" y="0" width="3" height="21" />
+                <rect x="18" y="0" width="3" height="21" />
+                <rect x="6" y="6" width="9" height="9" />
+                <rect x="8" y="8" width="5" height="5" class="icon-gap" />
+                <rect x="10" y="10" width="1" height="1" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="tab-group tab-group-other" aria-label="その他の二次元コード">
-          <button class="tab tab-rich" role="tab" data-standard="datamatrix" aria-selected="false">
-            <div class="tab-rich-main">
-              <div class="tab-rich-title">
-                <svg class="tab-rich-badge" viewBox="0 0 16 16">
-                  <rect x="0" y="0" width="2" height="16"/><rect x="0" y="14" width="16" height="2"/>
-                  <rect x="2" y="0" width="2" height="2"/><rect x="6" y="0" width="2" height="2"/><rect x="10" y="0" width="2" height="2"/><rect x="14" y="0" width="2" height="2"/>
-                  <rect x="14" y="2" width="2" height="2"/><rect x="14" y="6" width="2" height="2"/><rect x="14" y="10" width="2" height="2"/>
-                  <rect x="4" y="4" width="2" height="2"/><rect x="8" y="6" width="2" height="2"/><rect x="6" y="9" width="2" height="2"/><rect x="10" y="10" width="2" height="2"/>
-                </svg>
-                <span>DataMatrix</span>
-              </div>
-              <p class="tab-rich-desc">ECC200・正方形/長方形・高密度収納</p>
-            </div>
-            <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
-              <rect x="0" y="0" width="3" height="21"/><rect x="0" y="18" width="21" height="3"/>
-              <rect x="3" y="0" width="3" height="3"/><rect x="9" y="0" width="3" height="3"/><rect x="15" y="0" width="3" height="3"/>
-              <rect x="18" y="3" width="3" height="3"/><rect x="18" y="9" width="3" height="3"/><rect x="18" y="15" width="3" height="3"/>
-              <rect x="6" y="6" width="3" height="3"/><rect x="12" y="9" width="3" height="3"/><rect x="9" y="12" width="3" height="3"/>
-              <rect x="15" y="12" width="3" height="3"/><rect x="6" y="12" width="3" height="3"/><rect x="12" y="15" width="3" height="3"/>
-            </svg>
-          </button>
-          <button class="tab tab-rich" role="tab" data-standard="aztec" aria-selected="false">
-            <div class="tab-rich-main">
-              <div class="tab-rich-title">
-                <svg class="tab-rich-badge" viewBox="0 0 16 16">
-                  <rect x="0" y="0" width="16" height="16"/><rect x="2" y="2" width="12" height="12" class="icon-gap"/>
-                  <rect x="4" y="4" width="8" height="8"/><rect x="6" y="6" width="4" height="4" class="icon-gap"/>
-                </svg>
-                <span>AztecCode</span>
-              </div>
-              <p class="tab-rich-desc">中央にファインダー・正方形・自己完結</p>
-            </div>
-            <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
-              <rect x="0" y="0" width="21" height="21" class="icon-gap" stroke="none"/>
-              <rect x="0" y="0" width="21" height="3"/><rect x="0" y="18" width="21" height="3"/>
-              <rect x="0" y="0" width="3" height="21"/><rect x="18" y="0" width="3" height="21"/>
-              <rect x="6" y="6" width="9" height="9"/><rect x="8" y="8" width="5" height="5" class="icon-gap"/>
-              <rect x="10" y="10" width="1" height="1"/>
-            </svg>
-          </button>
-        </div>
-      </div>
 
-      <div class="tab-category" data-category="1d">
-        <div class="tab-category-label">一次元コード</div>
-        <div class="tab-group tab-group-barcode" aria-label="一次元コード系">
-          <button class="tab tab-rich" role="tab" data-standard="barcode" aria-selected="false">
-            <div class="tab-rich-main">
-              <div class="tab-rich-title">
-                <svg class="tab-rich-badge" viewBox="0 0 16 16">
-                  <rect x="1" y="2" width="1" height="12"/><rect x="3" y="2" width="2" height="12"/><rect x="6" y="2" width="1" height="12"/>
-                  <rect x="8" y="2" width="2" height="12"/><rect x="11" y="2" width="1" height="12"/><rect x="13" y="2" width="2" height="12"/>
-                </svg>
-                <span>バーコード</span>
+        <div class="tab-category" data-category="1d">
+          <div class="tab-category-label">一次元コード</div>
+          <div class="tab-group tab-group-barcode" aria-label="一次元コード系">
+            <button class="tab tab-rich" role="tab" data-standard="barcode" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect x="1" y="2" width="1" height="12" />
+                    <rect x="3" y="2" width="2" height="12" />
+                    <rect x="6" y="2" width="1" height="12" />
+                    <rect x="8" y="2" width="2" height="12" />
+                    <rect x="11" y="2" width="1" height="12" />
+                    <rect x="13" y="2" width="2" height="12" />
+                  </svg>
+                  <span>バーコード</span>
+                </div>
+                <p class="tab-rich-desc">JAN/Code128/Code39・数字/英数字</p>
               </div>
-              <p class="tab-rich-desc">JAN/Code128/Code39・数字/英数字</p>
-            </div>
-            <svg class="tab-rich-icon tab-rich-icon-wide" viewBox="0 0 32 13" aria-hidden="true">
-              <rect x="0" y="0" width="2" height="13"/><rect x="3" y="0" width="1" height="13"/><rect x="6" y="0" width="3" height="13"/>
-              <rect x="11" y="0" width="1" height="13"/><rect x="14" y="0" width="2" height="13"/><rect x="18" y="0" width="1" height="13"/>
-              <rect x="21" y="0" width="2" height="13"/><rect x="25" y="0" width="1" height="13"/><rect x="27" y="0" width="3" height="13"/>
-              <rect x="31" y="0" width="1" height="13"/>
-            </svg>
-          </button>
+              <svg class="tab-rich-icon tab-rich-icon-wide" viewBox="0 0 32 13" aria-hidden="true">
+                <rect x="0" y="0" width="2" height="13" />
+                <rect x="3" y="0" width="1" height="13" />
+                <rect x="6" y="0" width="3" height="13" />
+                <rect x="11" y="0" width="1" height="13" />
+                <rect x="14" y="0" width="2" height="13" />
+                <rect x="18" y="0" width="1" height="13" />
+                <rect x="21" y="0" width="2" height="13" />
+                <rect x="25" y="0" width="1" height="13" />
+                <rect x="27" y="0" width="3" height="13" />
+                <rect x="31" y="0" width="1" height="13" />
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
       </div>
     </nav>
 
@@ -181,33 +256,32 @@
               <button type="button" class="small-button edit-reset" id="edit-reset" hidden>編集をリセット</button>
             </div>
           </div>
-          <div class="content-bar" id="content-bar">
-            <span class="content-label" id="content-label">内容</span>
-            <span class="content-text" id="content-text"></span>
-            <span class="content-status" id="content-status"></span>
+          <div class="field" id="info-field">
+            <label id="info-label">諸元</label>
+            <dl class="info" id="info"></dl>
           </div>
-          <dl class="info" id="info"></dl>
         </div>
 
         <div class="content-bottom">
-          <div class="field" id="ec-field">
-            <label id="ec-label">誤り訂正</label>
-            <div class="segmented" id="ec-control" role="radiogroup" aria-labelledby="ec-label"></div>
-          </div>
-
           <div class="field" id="barcode-text-field" hidden>
             <label id="barcode-text-label">表示</label>
             <div id="barcode-text-control"></div>
           </div>
 
-          <div class="field" id="mask-field">
-            <label id="mask-label">マスクパターン</label>
-            <div class="segmented" id="mask-control" role="radiogroup" aria-labelledby="mask-label"></div>
-          </div>
-
           <div class="field" id="split-mode-field" hidden>
             <label id="split-mode-label">容量超過時の分割方式</label>
             <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
+          </div>
+
+          <div class="field" id="content-display-field">
+            <label id="content-display-label">内容表示</label>
+            <div class="color-row">
+              <label class="color-item">
+                <input type="checkbox" id="show-content-toggle" checked>
+                <span>コード下に表示する</span>
+              </label>
+            </div>
+            <div class="segmented" id="content-placement-control" role="radiogroup" hidden></div>
           </div>
 
           <div class="save-menu" id="save-menu">
@@ -218,14 +292,26 @@
       </section>
     </main>
 
-    <nav class="right-menu-zone" aria-label="予備メニュー">
+    <nav class="right-menu-zone" aria-label="右メニューゾーン">
+
       <div class="field" id="version-field">
         <label id="version-label">複雑度(型番)</label>
         <div class="version-box" id="version-control"></div>
       </div>
+
+      <div class="field" id="ec-field">
+        <label id="ec-label">誤り訂正</label>
+        <div class="segmented" id="ec-control" role="radiogroup" aria-labelledby="ec-label"></div>
+      </div>
+
+
+      <div class="field" id="mask-field">
+        <label id="mask-label">マスクパターン</label>
+        <div class="segmented" id="mask-control" role="radiogroup" aria-labelledby="mask-label"></div>
+      </div>
     </nav>
 
-   </div>
+  </div>
 
   <div class="modal-overlay" id="version-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="version-modal-title">
@@ -243,4 +329,5 @@
   <script src="barcode1d.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>

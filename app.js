@@ -9,10 +9,6 @@
   const qrMessage = $("qr-message");
   const infoEl = $("info");
   const dataInput = $("data-input");
-  const contentBar = $("content-bar");
-  const contentLabel = $("content-label");
-  const contentText = $("content-text");
-  const contentStatus = $("content-status");
   const editReset = $("edit-reset");
 
   const MODE_NAMES = { numeric: "数字", alphanumeric: "英数字", byte: "バイト (UTF-8)" };
@@ -40,6 +36,8 @@
     outerBg: "#e5e7eb",
     outerSame: false,
     splitMode: "simple", // "simple" | "structured" (QR の Structured Append)
+    showContent: true,
+    contentPlacement: "combined", // "each" | "combined" | "both" (複数コード表示時のみ有効)
     qr: { ec: "M", versionAuto: true, version: 5, maskAuto: true, mask: 0 },
     micro: { ec: "L", versionAuto: true, version: 4, maskAuto: true, mask: 0 },
     rmqr: { ec: "M", versionAuto: true, height: 11, width: 43 },
@@ -396,6 +394,27 @@
     });
   }
 
+  function buildContentDisplayControl() {
+    const field = $("content-display-field");
+    const box = $("content-placement-control");
+    const std = state.standard;
+    field.hidden = std === "barcode";
+    if (field.hidden) return;
+    const n = current ? current.results.length : 1;
+    const structuredNow = std === "qr" && current && current.results[0] && current.results[0].structured;
+    box.hidden = !(n > 1 && !structuredNow);
+    if (box.hidden) return;
+    box.textContent = "";
+    [["各コードの下", "each"], ["全体の下に一つ", "combined"], ["両方", "both"]].forEach(([label, v]) => {
+      box.appendChild(makeSegButton(label, state.contentPlacement === v, () => {
+        state.contentPlacement = v;
+        rebuildControls();
+        drawCurrent();
+        renderInfo();
+      }));
+    });
+  }
+
   function rebuildControls() {
     $("preview").classList.toggle("other-standard", !QR_FAMILY.includes(state.standard));
     buildEcControl();
@@ -403,6 +422,7 @@
     buildMaskControl();
     buildBarcodeTextControl();
     buildSplitModeControl();
+    buildContentDisplayControl();
   }
 
   /* ---------- エンコード ---------- */
@@ -443,12 +463,13 @@
   }
 
   /* 容量オーバー時は複数コードに分割する。QR 表示域の大きさは変えず、
-     各コードを縮小してグリッド配置する (drawCurrent 側で対応)。 */
+     各コードを縮小してグリッド配置する (drawCurrent 側で対応)。
+     戻り値は { results, texts } (texts は各コードに実際にエンコードした元テキスト) */
   function runEncodeMulti() {
     const std = state.standard;
     const text = dataInput.value;
     try {
-      return [encodeOne(std, text, null)];
+      return { results: [encodeOne(std, text, null)], texts: [text] };
     } catch (e) {
       if (!(e && e.code === "TOO_LONG") || std === "barcode") throw e;
     }
@@ -460,8 +481,9 @@
       if (chunks.length < count) break; // 1文字/コードが下限。これ以上細かくできない
       try {
         const parity = structuredEligible ? QRLib.computeParity(text) : null;
-        return chunks.map((chunk, i) =>
+        const results = chunks.map((chunk, i) =>
           encodeOne(std, chunk, structuredEligible ? { index: i, count, parity } : null));
+        return { results, texts: chunks };
       } catch (e) {
         if (e && e.code === "TOO_LONG") { lastErr = e; continue; }
         throw e;
@@ -489,6 +511,18 @@
   const CANVAS_MARGIN = 16;
   /* 複数コード表示時の、コード間の最低間隔 */
   const GRID_GAP = 6;
+
+  /* 指定幅に収まるよう末尾を "…" で省略する */
+  function truncateToWidth(context, text, maxWidth) {
+    if (context.measureText(text).width <= maxWidth) return text;
+    let lo = 0, hi = text.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (context.measureText(text.slice(0, mid) + "…").width <= maxWidth) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo === 0 ? "…" : text.slice(0, lo) + "…";
+  }
 
   function drawCurrent() {
     if (!current) return;
@@ -531,12 +565,14 @@
 
     if (results.length === 1) {
       const r = results[0];
+      const showCaption = effectivePlacement() === "each";
       const qz = r.quietZone;
       const mw = r.width + qz * 2;
       const mh = r.height + qz * 2;
-      const scale = Math.max(1, Math.floor(Math.min(availW / mw, availH / mh)));
+      const captionH = showCaption ? Math.round(20 * dpr) : 0;
+      const scale = Math.max(1, Math.floor(Math.min(availW / mw, (availH - captionH) / mh)));
       canvas.width = mw * scale;
-      canvas.height = mh * scale;
+      canvas.height = mh * scale + captionH;
       canvas.style.width = `${canvas.width / dpr}px`;
       canvas.style.height = `${canvas.height / dpr}px`;
       ctx.fillStyle = state.bg;
@@ -549,16 +585,30 @@
           if (row[x]) ctx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
         }
       }
+      if (showCaption) {
+        ctx.font = `${Math.round(12 * dpr)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const maxW = canvas.width - 8 * dpr;
+        const text = truncateToWidth(ctx, perCodeContentText(0), maxW);
+        ctx.fillText(text, canvas.width / 2, mh * scale + 3 * dpr, maxW);
+      }
       lastDraw = { scale, qz, dpr };
       return;
     }
 
     /* 複数コード: QR 表示域の大きさは変えず、グリッドに縮小配置する。編集は非対応。 */
     const n = results.length;
+    const placement = effectivePlacement();
+    const showCaptions = placement === "each" || placement === "both";
+    const showCombined = placement === "combined" || placement === "both";
     const { cols, rows } = gridDims(n);
     const gap = GRID_GAP * dpr;
+    const captionH = showCaptions ? Math.round(16 * dpr) : 0;
+    const combinedH = showCombined ? Math.round(18 * dpr) : 0;
+    const gridAvailH = availH - combinedH;
     const cellW = (availW - gap * (cols - 1)) / cols;
-    const cellH = (availH - gap * (rows - 1)) / rows;
+    const cellH = (gridAvailH - gap * (rows - 1)) / rows - captionH;
     const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
     let scale = Infinity;
     for (const { mw, mh } of dims) scale = Math.min(scale, Math.floor(Math.min(cellW / mw, cellH / mh)));
@@ -571,12 +621,13 @@
     ctx.fillStyle = state.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = state.fg;
+    if (showCaptions || showCombined) ctx.font = `${Math.round(10 * dpr)}px monospace`;
     for (let i = 0; i < n; i++) {
       const r = results[i];
       const { mw, mh } = dims[i];
       const col = i % cols, row = Math.floor(i / cols);
       const cellX = col * (cellW + gap);
-      const cellY = row * (cellH + gap);
+      const cellY = row * (cellH + captionH + gap);
       const offX = cellX + (cellW - mw * scale) / 2;
       const offY = cellY + (cellH - mh * scale) / 2;
       const qz = r.quietZone;
@@ -587,59 +638,62 @@
           if (rowData[x]) ctx.fillRect(offX + (x + qz) * scale, offY + (y + qz) * scale, scale, scale);
         }
       }
+      if (showCaptions) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const maxW = cellW - 4 * dpr;
+        const text = truncateToWidth(ctx, perCodeContentText(i), maxW);
+        ctx.fillText(text, cellX + cellW / 2, cellY + cellH + 2 * dpr, maxW);
+      }
+    }
+    if (showCombined) {
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const maxW = canvas.width - 8 * dpr;
+      const combined = combinedContentText();
+      const text = truncateToWidth(ctx, combined == null ? "(読み取り不能)" : combined, maxW);
+      ctx.fillText(text, canvas.width / 2, gridAvailH + 3 * dpr, maxW);
     }
     lastDraw = null;
   }
 
-  /* ---------- 内容表示 (QR 系は行列からリアルタイム復号) ---------- */
+  /* ---------- 内容表示 (コード下に表示するかはユーザーが選択) ---------- */
 
-  function updateContent() {
-    const std = state.standard;
-    contentText.classList.remove("unreadable");
-    contentStatus.className = "content-status";
-    if (!current) {
-      contentText.textContent = "";
-      contentStatus.textContent = "";
-      return;
-    }
-    const results = current.results;
-    const r = results[0];
-    if (QR_FAMILY.includes(std)) {
-      contentLabel.textContent = results.length > 1 ? "内容(復号・結合)" : "内容(復号)";
-      try {
-        let combined = "";
-        let totalCorrected = 0;
-        for (let i = 0; i < results.length; i++) {
-          const d = QRLib.decode(current.modulesList[i], std);
-          combined += d.text;
-          totalCorrected += d.corrected;
-        }
-        contentText.textContent = combined === "" ? "(空)" : combined;
-        if (totalCorrected > 0) {
-          contentStatus.textContent = `誤り訂正で ${totalCorrected} コード語を復元`;
-          contentStatus.classList.add("corrected");
-        } else {
-          contentStatus.textContent = current.edited ? "訂正なしで一致" : "";
-        }
-      } catch (e) {
-        contentText.textContent = "(読み取り不能)";
-        contentText.classList.add("unreadable");
-        contentStatus.textContent = e.message;
-        contentStatus.classList.add("error");
-      }
-    } else if (std === "barcode") {
-      contentLabel.textContent = "内容";
-      contentText.textContent = r.display;
-      contentStatus.textContent = r.symbology === "ean13" && dataInput.value.length === 12
-        ? `検査数字 ${r.display[12]} を付加` : "";
-    } else {
-      contentLabel.textContent = "内容";
-      contentText.textContent = dataInput.value;
-      contentStatus.textContent = "";
-    }
+  /* 複数コード時、各コードの下/全体の下に一つ/両方 のどれを使うか。
+     Structured Append は各コード単体に意味のある内容がないため常に「全体の下に一つ」。 */
+  function effectivePlacement() {
+    if (!state.showContent || !current) return "none";
+    if (current.results.length === 1) return "each";
+    const structuredNow = state.standard === "qr" && current.results[0].structured;
+    return structuredNow ? "combined" : state.contentPlacement;
   }
 
-  /* ---------- 情報表示 ---------- */
+  /* 個々のコードの内容 (QR 系は行列からリアルタイム復号、それ以外は元テキストの断片) */
+  function perCodeContentText(i) {
+    const std = state.standard;
+    if (QR_FAMILY.includes(std)) {
+      try {
+        return QRLib.decode(current.modulesList[i], std).text;
+      } catch (e) {
+        return "(読み取り不能)";
+      }
+    }
+    return current.texts[i];
+  }
+
+  function combinedContentText() {
+    const std = state.standard;
+    if (QR_FAMILY.includes(std)) {
+      try {
+        return current.results.map((_, i) => QRLib.decode(current.modulesList[i], std).text).join("");
+      } catch (e) {
+        return null;
+      }
+    }
+    return dataInput.value;
+  }
+
+  /* ---------- 情報表示 (諸元) ---------- */
 
   function renderInfo() {
     infoEl.textContent = "";
@@ -650,6 +704,9 @@
     const r = results[0];
     const items = [];
     const sizeText = `${r.width}×${r.height}`;
+
+    const contentValue = combinedContentText();
+    items.push(["内容", contentValue == null ? "(読み取り不能)" : contentValue === "" ? "(空)" : contentValue]);
 
     if (results.length > 1) {
       const modeName = std === "qr" && state.splitMode === "structured" ? "Structured Append" : "シンプル分割";
@@ -698,21 +755,21 @@
     canvas.hidden = true;
     qrMessage.hidden = false;
     qrMessage.textContent = message;
-    /* content-bar / info は非表示にせず空にするだけにして、
+    /* info は非表示にせず空にするだけにして、
        QR 表示域 (qr-frame) の高さがエラー時にも変化しないようにする */
     infoEl.textContent = "";
-    contentText.textContent = "";
-    contentStatus.textContent = "";
     editReset.hidden = true;
     qrCard.style.background = state.outerSame ? state.bg : state.outerBg;
+    buildContentDisplayControl();
   }
 
   function render() {
     const std = state.standard;
     try {
-      const results = runEncodeMulti();
+      const { results, texts } = runEncodeMulti();
       current = {
         results,
+        texts,
         modulesList: results.map((res) => res.modules.map((row) => row.slice())),
         edited: false,
       };
@@ -721,8 +778,8 @@
       editReset.hidden = true;
       const editable = results.length === 1 && QR_FAMILY.includes(std);
       canvas.classList.toggle("editable", editable);
+      buildContentDisplayControl();
       drawCurrent();
-      updateContent();
       renderInfo();
     } catch (e) {
       if (e && (e.code || e.name === "QREncodeError")) {
@@ -750,7 +807,7 @@
       row.some((v, xx) => v !== r.modules[yy][xx]));
     editReset.hidden = !current.edited;
     drawCurrent();
-    updateContent();
+    renderInfo();
   });
 
   editReset.addEventListener("click", () => {
@@ -759,7 +816,7 @@
     current.edited = false;
     editReset.hidden = true;
     drawCurrent();
-    updateContent();
+    renderInfo();
   });
 
   /* ---------- 保存 (PNG / SVG) ---------- */
@@ -978,6 +1035,13 @@
     tab.addEventListener("click", () => selectStandard(tab.dataset.standard));
   }
   dataInput.addEventListener("input", render);
+
+  $("show-content-toggle").addEventListener("change", () => {
+    state.showContent = $("show-content-toggle").checked;
+    rebuildControls();
+    drawCurrent();
+    renderInfo();
+  });
 
   new ResizeObserver(() => {
     if (current) drawCurrent();
