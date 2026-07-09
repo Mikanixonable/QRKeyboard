@@ -148,7 +148,7 @@
     if (std === "barcode") {
       const seg = document.createElement("div");
       seg.className = "segmented";
-      [["JAN / EAN-13", "ean13"], ["Code 128", "code128"], ["Code 39", "code39"]].forEach(([name, sym]) => {
+      [["JAN / EAN-13", "ean13"], ["Code 128", "code128"], ["Code 39", "code39"], ["GS1 DataBar-14", "gs1databar"]].forEach(([name, sym]) => {
         seg.appendChild(makeSegButton(name, st.symbology === sym, () => {
           st.symbology = sym;
           rebuildControls();
@@ -1091,8 +1091,8 @@
     return `code-${state.standard}`;
   }
 
-  $("save-png").addEventListener("click", () => {
-    if (!current) return;
+  /* PNG 描画を save-png とクリップボードコピーの両方から使えるように切り出す */
+  function renderPngCanvas() {
     const results = current.results;
     const off = document.createElement("canvas");
     const octx = off.getContext("2d");
@@ -1158,8 +1158,41 @@
         }
       });
     }
-    off.toBlob((blob) => blob && download(blob, `${filenameBase()}.png`), "image/png");
+    return off;
+  }
+
+  $("save-png").addEventListener("click", () => {
+    if (!current) return;
+    renderPngCanvas().toBlob((blob) => blob && download(blob, `${filenameBase()}.png`), "image/png");
   });
+
+  const copyPngBtn = $("copy-png");
+  if (copyPngBtn) {
+    copyPngBtn.addEventListener("click", async () => {
+      if (!current) return;
+      if (!navigator.clipboard || !window.ClipboardItem) {
+        setCopyStatus("このブラウザはクリップボードへの画像コピーに対応していません", true);
+        return;
+      }
+      try {
+        const blob = await new Promise((resolve) => renderPngCanvas().toBlob(resolve, "image/png"));
+        if (!blob) throw new Error("blob generation failed");
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setCopyStatus("コピーしました");
+      } catch (e) {
+        setCopyStatus(`コピーに失敗しました: ${e.message}`, true);
+      }
+    });
+  }
+
+  function setCopyStatus(text, isError) {
+    const el = $("copy-status");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle("error", !!isError);
+    clearTimeout(setCopyStatus._t);
+    setCopyStatus._t = setTimeout(() => { el.textContent = ""; }, 2500);
+  }
 
   $("save-svg").addEventListener("click", () => {
     if (!current) return;
@@ -1313,6 +1346,7 @@
     if (format === F.CODE_128) return { std: "barcode", symbology: "code128" };
     if (format === F.CODE_39) return { std: "barcode", symbology: "code39" };
     if (format === F.EAN_13) return { std: "barcode", symbology: "ean13" };
+    if (format === F.RSS_14) return { std: "barcode", symbology: "gs1databar" };
     return null;
   }
 

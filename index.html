@@ -221,6 +221,8 @@
             <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
             <input type="file" id="scan-file-input" accept="image/*" hidden>
             <span class="scan-status" id="scan-status"></span>
+            <span class="scan-note">※ マイクロQR・rMQRは読み取りライブラリ (ZXing) が非対応のため読み取れません</span>
+            <span class="scan-note">※ GS1 DataBar-14 も生成はできますが、読み取りライブラリ側の非互換により読み取れません</span>
           </div>
         </div>
       </div>
@@ -299,7 +301,9 @@
           <div class="save-menu" id="save-menu">
             <button type="button" class="small-button" id="save-png">PNG保存</button>
             <button type="button" class="small-button" id="save-svg">SVG保存</button>
+            <button type="button" class="small-button" id="copy-png">画像をコピー</button>
           </div>
+          <span class="copy-status" id="copy-status"></span>
         </div>
       </section>
     </main>

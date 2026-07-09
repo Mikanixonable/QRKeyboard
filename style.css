@@ -442,6 +442,16 @@ textarea:focus, select:focus, input:focus-visible,
   color: var(--text-sub);
 }
 .scan-status.error { color: var(--danger); font-weight: 600; }
+.scan-note {
+  font-size: 10px;
+  color: var(--text-sub);
+  line-height: 1.4;
+}
+.copy-status {
+  font-size: 11px;
+  color: var(--text-sub);
+}
+.copy-status.error { color: var(--danger); font-weight: 600; }
 .qr-message {
   color: var(--danger);
   font-weight: 600;

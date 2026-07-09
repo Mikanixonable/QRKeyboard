@@ -2,9 +2,10 @@
  * barcode1d.js — 1次元バーコード エンコーダ(依存なし)
  *
  * 準拠規格:
- *   - JAN / EAN-13: ISO/IEC 15420 (JIS X 0501)
- *   - Code 128:     ISO/IEC 15417
- *   - Code 39:      ISO/IEC 16388
+ *   - JAN / EAN-13:      ISO/IEC 15420 (JIS X 0501)
+ *   - Code 128:          ISO/IEC 15417
+ *   - Code 39:           ISO/IEC 16388
+ *   - GS1 DataBar-14:    ISO/IEC 24724 (GS1 General Specifications)
  * パターンテーブルは規格書記載のもの (zint BSD-3-Clause 実装と
  * クロスチェック済み)。
  */
@@ -19,6 +20,17 @@
     }
   }
 
+  /* GTIN 系共通のモジュラス 10 検査数字 (末尾桁の重みが 3 になるよう桁数に応じて交互配置) */
+  function gtinCheckDigit(bodyDigits) {
+    const n = bodyDigits.length;
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      const weight = (n - 1 - i) % 2 === 0 ? 3 : 1;
+      sum += (bodyDigits.charCodeAt(i) - 48) * weight;
+    }
+    return String((10 - (sum % 10)) % 10);
+  }
+
   /* ===== JAN / EAN-13 ===== */
 
   /* 左側 A (L) パターン。B (G) は R の鏡像、R は A の反転 */
@@ -29,9 +41,7 @@
     "011001", "011100", "010101", "010110", "011010"];
 
   function eanCheckDigit(d12) {
-    let sum = 0;
-    for (let i = 0; i < 12; i++) sum += (d12.charCodeAt(i) - 48) * (i % 2 === 0 ? 1 : 3);
-    return String((10 - (sum % 10)) % 10);
+    return gtinCheckDigit(d12);
   }
 
   function encodeEAN13(text) {
@@ -187,6 +197,156 @@
     return { bits, display: "*" + text + "*", name: "Code 39", quietLeft: 10, quietRight: 10 };
   }
 
+  /* ===== GS1 DataBar-14 (RSS-14) ===== */
+  /* ISO/IEC 24724 Annex の組み合わせ幅アルゴリズム。テーブル・アルゴリズムは
+     zint (BSD-3-Clause) の rss.c/rss.h の値と突き合わせて実装。 */
+
+  const DBAR_COMBINS_TABLE = [
+    [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 2, 1, 1, 1, 1], [1, 3, 3, 1, 1, 1],
+    [1, 4, 6, 4, 1, 1], [1, 5, 10, 10, 5, 1], [1, 6, 15, 20, 15, 6], [1, 7, 21, 35, 35, 21],
+    [1, 8, 28, 56, 70, 56], [1, 9, 36, 84, 126, 126], [1, 10, 45, 120, 210, 252],
+    [1, 11, 55, 165, 330, 462], [1, 12, 66, 220, 495, 792], [1, 13, 78, 286, 715, 1287],
+    [1, 14, 91, 364, 1001, 2002], [1, 15, 105, 455, 1365, 3003], [1, 16, 120, 560, 1820, 4368],
+    [1, 17, 136, 680, 2380, 6188],
+  ];
+  function dbarCombins(n, r) {
+    if (n < 0 || r < 0 || r > n) return 0;
+    if (n < DBAR_COMBINS_TABLE.length && r < DBAR_COMBINS_TABLE[0].length) return DBAR_COMBINS_TABLE[n][r];
+    let result = 1;
+    for (let i = 0; i < r; i++) result = (result * (n - i)) / (i + 1);
+    return Math.round(result);
+  }
+
+  /* 値 val (幅の合計 n モジュール、elements 個の要素、最大幅 maxWidth) を
+     エレメント幅の配列に変換する (組み合わせ数え上げ) */
+  function dbarGetWidths(valIn, nIn, elements, maxWidth, noNarrow) {
+    const widths = new Array(elements).fill(0);
+    let val = valIn, n = nIn, narrowMask = 0, bar = 0;
+    for (bar = 0; bar < elements - 1; bar++) {
+      let elmWidth = 1;
+      narrowMask |= (1 << bar);
+      let subVal;
+      for (;;) {
+        subVal = dbarCombins(n - elmWidth - 1, elements - bar - 2);
+        if (noNarrow && !narrowMask && (n - elmWidth - (elements - bar - 1)) >= (elements - bar - 1)) {
+          subVal -= dbarCombins(n - elmWidth - (elements - bar), elements - bar - 2);
+        }
+        if (elements - bar - 1 > 1) {
+          let lessVal = 0;
+          for (let mxw = n - elmWidth - (elements - bar - 2); mxw > maxWidth; mxw--) {
+            lessVal += dbarCombins(n - elmWidth - mxw - 1, elements - bar - 3);
+          }
+          subVal -= lessVal * (elements - 1 - bar);
+        } else if (n - elmWidth > maxWidth) {
+          subVal -= 1;
+        }
+        val -= subVal;
+        if (val < 0) break;
+        elmWidth++;
+        narrowMask &= ~(1 << bar);
+      }
+      val += subVal;
+      n -= elmWidth;
+      widths[bar] = elmWidth;
+    }
+    widths[bar] = n;
+    return widths;
+  }
+
+  function dbarWidths(vOdd, vEven, nOdd, nEven, elements, maxWidth, noNarrow) {
+    const oddW = dbarGetWidths(vOdd, nOdd, elements, maxWidth, noNarrow);
+    const evenW = dbarGetWidths(vEven, nEven, elements, 9 - maxWidth, !noNarrow);
+    const out = new Array(elements * 2);
+    for (let k = 0; k < elements; k++) {
+      out[2 * k] = oddW[k];
+      out[2 * k + 1] = evenW[k];
+    }
+    return out;
+  }
+
+  const DBAR_G_SUM = [0, 161, 961, 2015, 2715, 0, 336, 1036, 1516];
+  const DBAR_T_EVEN_ODD = [1, 10, 34, 70, 126, 4, 20, 48, 81];
+  const DBAR_MODULES_ODD = [12, 10, 8, 6, 4, 5, 7, 9, 11];
+  const DBAR_MODULES_EVEN = [4, 6, 8, 10, 12, 10, 8, 6, 4];
+  const DBAR_WIDEST = [8, 6, 4, 3, 1, 2, 4, 6, 8];
+  const DBAR_FINDER_PATTERN = [
+    [3, 8, 2, 1, 1], [3, 5, 5, 1, 1], [3, 3, 7, 1, 1], [3, 1, 9, 1, 1], [2, 7, 4, 1, 1],
+    [2, 5, 6, 1, 1], [2, 3, 8, 1, 1], [1, 5, 7, 1, 1], [1, 3, 9, 1, 1],
+  ];
+  const DBAR_CHECKSUM_WEIGHT = [
+    [1, 3, 9, 27, 2, 6, 18, 54], [4, 12, 36, 29, 8, 24, 72, 58],
+    [16, 48, 65, 37, 32, 17, 51, 74], [64, 34, 23, 69, 49, 68, 46, 59],
+  ];
+
+  function dbarGroup(val, outside) {
+    const end = outside ? 4 : 8;
+    let i;
+    for (i = outside ? 0 : 5; i < end; i++) {
+      if (val < DBAR_G_SUM[i + 1]) return i;
+    }
+    return i;
+  }
+
+  function encodeGS1DataBar(text) {
+    if (!/^\d{13,14}$/.test(text)) {
+      throw new BAREncodeError("INVALID_CHARS",
+        "GS1 DataBar-14 は数字 13 桁 (または検査数字込み 14 桁) で入力してください");
+    }
+    const digits = text.slice(0, 13);
+    const check = gtinCheckDigit(digits);
+    if (text.length === 14 && text[13] !== check) {
+      throw new BAREncodeError("INVALID_CHARS", "検査数字が不正です (正: " + check + ")");
+    }
+
+    let val = 0;
+    for (const ch of digits) val = val * 10 + (ch.charCodeAt(0) - 48);
+    const leftPair = Math.floor(val / 4537077);
+    const rightPair = val % 4537077;
+    const dataChar = [
+      Math.floor(leftPair / 1597), leftPair % 1597,
+      Math.floor(rightPair / 1597), rightPair % 1597,
+    ];
+
+    const dataWidths = dataChar.map((v, i) => {
+      const outside = i % 2 === 0;
+      const group = dbarGroup(v, outside);
+      const rem = v - DBAR_G_SUM[group];
+      const vDiv = Math.floor(rem / DBAR_T_EVEN_ODD[group]);
+      const vMod = rem % DBAR_T_EVEN_ODD[group];
+      const oddVal = outside ? vDiv : vMod;
+      const evenVal = outside ? vMod : vDiv;
+      return dbarWidths(oddVal, evenVal, DBAR_MODULES_ODD[group], DBAR_MODULES_EVEN[group],
+        4, DBAR_WIDEST[group], i % 2 === 1);
+    });
+
+    let checksum = 0;
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 8; j++) checksum += DBAR_CHECKSUM_WEIGHT[i][j] * dataWidths[i][j];
+    }
+    checksum %= 79;
+    if (checksum >= 8) checksum++;
+    if (checksum >= 72) checksum++;
+    const cLeft = Math.floor(checksum / 9);
+    const cRight = checksum % 9;
+
+    const total = new Array(46).fill(0);
+    total[0] = 1; total[1] = 1;
+    total[44] = 1; total[45] = 1;
+    for (let i = 0; i < 8; i++) total[i + 2] = dataWidths[0][i];
+    for (let i = 0; i < 8; i++) total[i + 15] = dataWidths[1][7 - i];
+    for (let i = 0; i < 8; i++) total[i + 23] = dataWidths[3][i];
+    for (let i = 0; i < 8; i++) total[i + 36] = dataWidths[2][7 - i];
+    for (let i = 0; i < 5; i++) total[i + 10] = DBAR_FINDER_PATTERN[cLeft][i];
+    for (let i = 0; i < 5; i++) total[i + 31] = DBAR_FINDER_PATTERN[cRight][4 - i];
+
+    let bits = "", bar = true;
+    for (const w of total) {
+      bits += (bar ? "1" : "0").repeat(w);
+      bar = !bar;
+    }
+    return { bits, display: digits + check, name: "GS1 DataBar-14", quietLeft: 10, quietRight: 10 };
+  }
+
   function encode(options) {
     const text = options.text;
     if (typeof text !== "string" || text.length === 0) {
@@ -197,6 +357,7 @@
       case "ean13": r = encodeEAN13(text); break;
       case "code128": r = encodeCode128(text); break;
       case "code39": r = encodeCode39(text); break;
+      case "gs1databar": r = encodeGS1DataBar(text); break;
       default: throw new BAREncodeError("BAD_OPTION", "unknown symbology: " + options.symbology);
     }
     const pattern = Uint8Array.from(r.bits, (c) => (c === "1" ? 1 : 0));
