@@ -221,8 +221,8 @@
             <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
             <input type="file" id="scan-file-input" accept="image/*" hidden>
             <span class="scan-status" id="scan-status"></span>
-            <span class="scan-note">※ マイクロQR・rMQRは読み取りライブラリ (ZXing) が非対応のため読み取れません</span>
-            <span class="scan-note">※ GS1 DataBar-14 も生成はできますが、読み取りライブラリ側の非互換により読み取れません</span>
+            <span class="scan-note">※ マイクロQR・rMQRは自前の検出処理で読み取ります(正面に近い角度で撮影/取り込みしてください)</span>
+            <span class="scan-note">※ GS1 DataBar-14 は生成はできますが、読み取りライブラリ側の非互換により読み取れません</span>
           </div>
         </div>
       </div>

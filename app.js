@@ -1350,6 +1350,186 @@
     return null;
   }
 
+  /* ---------- マイクロQR・rMQR 用の自前検出 (ZXing が非対応のため) ----------
+     位置検出パターン (1:1:3:1:1 濃淡比) を画像から探し、そこを基準に
+     取りうる型番/寸法を総当たりでグリッドサンプリングして QRLib.decode に
+     渡す。回転・傾きへの補正は行わないため、正面から近い角度で撮影/取り込み
+     した画像を前提とする簡易実装。 */
+
+  function checkFinderRatio(counts) {
+    let total = 0;
+    for (let i = 0; i < 5; i++) total += counts[i];
+    if (total < 7) return 0;
+    const moduleSize = total / 7;
+    const maxVariance = moduleSize / 1.5;
+    const targets = [1, 1, 3, 1, 1];
+    for (let i = 0; i < 5; i++) {
+      if (Math.abs(counts[i] - targets[i] * moduleSize) >= targets[i] * maxVariance) return 0;
+    }
+    return moduleSize;
+  }
+
+  function crossCheckLine(matrix, fixed, varStart, vertical, maxCount) {
+    const limit = vertical ? matrix.getHeight() : matrix.getWidth();
+    const get = (v) => (vertical ? matrix.get(fixed, v) : matrix.get(v, fixed));
+    const counts = [0, 0, 0, 0, 0];
+    let i = varStart;
+    while (i >= 0 && get(i)) { counts[2]++; i--; }
+    if (i < 0) return null;
+    while (i >= 0 && !get(i) && counts[1] < maxCount) { counts[1]++; i--; }
+    if (i < 0 || counts[1] >= maxCount) return null;
+    while (i >= 0 && get(i) && counts[0] < maxCount) { counts[0]++; i--; }
+    if (counts[0] >= maxCount) return null;
+
+    i = varStart + 1;
+    while (i < limit && get(i)) { counts[2]++; i++; }
+    if (i === limit) return null;
+    while (i < limit && !get(i) && counts[3] < maxCount) { counts[3]++; i++; }
+    if (i === limit || counts[3] >= maxCount) return null;
+    while (i < limit && get(i) && counts[4] < maxCount) { counts[4]++; i++; }
+    if (counts[4] >= maxCount) return null;
+
+    const moduleSize = checkFinderRatio(counts);
+    if (!moduleSize) return null;
+    return { center: i - counts[4] - counts[3] - counts[2] / 2, moduleSize };
+  }
+
+  /* 位置検出パターン候補を探し、支持数 (一致した走査行数) の多い順に返す */
+  function findFinderCandidates(matrix) {
+    const width = matrix.getWidth(), height = matrix.getHeight();
+    const raw = [];
+    const counts = [0, 0, 0, 0, 0];
+    for (let y = 0; y < height; y++) {
+      counts[0] = counts[1] = counts[2] = counts[3] = counts[4] = 0;
+      let currentState = 0;
+      for (let x = 0; x < width; x++) {
+        const black = matrix.get(x, y);
+        if (black) {
+          if ((currentState & 1) === 1) currentState++;
+          counts[currentState]++;
+        } else if ((currentState & 1) === 0) {
+          if (currentState === 4) {
+            const moduleSize = checkFinderRatio(counts);
+            if (moduleSize) {
+              const centerX = x - counts[4] - counts[3] - counts[2] / 2;
+              const total = (counts[0] + counts[1] + counts[2] + counts[3] + counts[4]) * 2;
+              const vcheck = crossCheckLine(matrix, Math.round(centerX), y, true, total);
+              if (vcheck) {
+                const hcheck = crossCheckLine(matrix, Math.round(vcheck.center), Math.round(centerX), false, total);
+                if (hcheck) {
+                  raw.push({
+                    x: hcheck.center,
+                    y: vcheck.center,
+                    moduleSize: (moduleSize + vcheck.moduleSize + hcheck.moduleSize) / 3,
+                  });
+                }
+              }
+            }
+            counts[0] = counts[2]; counts[1] = counts[3]; counts[2] = counts[4];
+            counts[3] = 1; counts[4] = 0;
+            currentState = 3;
+          } else {
+            currentState++;
+            counts[currentState]++;
+          }
+        } else {
+          counts[currentState]++;
+        }
+      }
+    }
+    const clusters = [];
+    for (const c of raw) {
+      let merged = false;
+      for (const cl of clusters) {
+        if (Math.hypot(cl.x / cl.n - c.x, cl.y / cl.n - c.y) < (cl.moduleSize / cl.n) * 2) {
+          cl.x += c.x; cl.y += c.y; cl.moduleSize += c.moduleSize; cl.n++;
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) clusters.push({ x: c.x, y: c.y, moduleSize: c.moduleSize, n: 1 });
+    }
+    return clusters
+      .map((cl) => ({ x: cl.x / cl.n, y: cl.y / cl.n, moduleSize: cl.moduleSize / cl.n, support: cl.n }))
+      .sort((a, b) => b.support - a.support);
+  }
+
+  function sampleGridFromFinder(matrix, cand, cols, rows) {
+    const leftPx = cand.x - 3.5 * cand.moduleSize;
+    const topPx = cand.y - 3.5 * cand.moduleSize;
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      const row = [];
+      for (let c = 0; c < cols; c++) {
+        const px = Math.round(leftPx + (c + 0.5) * cand.moduleSize);
+        const py = Math.round(topPx + (r + 0.5) * cand.moduleSize);
+        row.push(matrix.get(px, py) ? 1 : 0);
+      }
+      grid.push(row);
+    }
+    return { grid, box: { x0: leftPx, y0: topPx, w: cols * cand.moduleSize, h: rows * cand.moduleSize } };
+  }
+
+  /* マイクロQR (4 型番) と rMQR (32 型番) を、検出した位置検出パターンを起点に総当たりで試す */
+  function tryDecodeMicroRmqr(offCanvas) {
+    if (!zxingAvailable) return null;
+    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
+    const binarizer = new ZXing.HybridBinarizer(luminanceSource);
+    const matrix = new ZXing.BinaryBitmap(binarizer).getBlackMatrix();
+    const candidates = findFinderCandidates(matrix).slice(0, 5);
+    for (const cand of candidates) {
+      for (const size of QRLib.MICRO_SIZES) {
+        try {
+          const { grid, box } = sampleGridFromFinder(matrix, cand, size, size);
+          const decoded = QRLib.decode(grid, "micro");
+          return { std: "micro", decoded, box };
+        } catch (e) { /* 次の候補を試す */ }
+      }
+      for (let i = 0; i < QRLib.RMQR_HEIGHTS.length; i++) {
+        try {
+          const { grid, box } = sampleGridFromFinder(matrix, cand, QRLib.RMQR_WIDTHS[i], QRLib.RMQR_HEIGHTS[i]);
+          const decoded = QRLib.decode(grid, "rmqr");
+          return { std: "rmqr", decoded, box };
+        } catch (e) { /* 次の候補を試す */ }
+      }
+    }
+    return null;
+  }
+
+  function handleCustomDecodeResult(found, offCanvas) {
+    const { std, decoded, box } = found;
+    const x0 = Math.max(0, Math.floor(box.x0));
+    const y0 = Math.max(0, Math.floor(box.y0));
+    const w = Math.min(offCanvas.width - x0, Math.ceil(box.w));
+    const h = Math.min(offCanvas.height - y0, Math.ceil(box.h));
+    const colors = sampleScanColorsInBox(offCanvas, x0, y0, w, h);
+    if (colors) {
+      if (colors.fg) state.fg = colors.fg;
+      if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
+      $("color-fg").value = state.fg;
+      $("color-bg").value = state.bg;
+      $("color-outer").value = state.outerBg;
+      $("color-outer").disabled = state.outerSame;
+      $("color-outer-same").checked = state.outerSame;
+    }
+    dataInput.value = decoded.text;
+    if (std === "micro") {
+      state.micro.versionAuto = false;
+      state.micro.version = Number(decoded.versionName.slice(1));
+      state.micro.ec = decoded.ecLevel;
+      state.micro.maskAuto = false;
+      state.micro.mask = decoded.mask;
+    } else {
+      const m = /^R(\d+)x(\d+)$/.exec(decoded.versionName);
+      state.rmqr.versionAuto = false;
+      state.rmqr.height = Number(m[1]);
+      state.rmqr.width = Number(m[2]);
+      state.rmqr.ec = decoded.ecLevel;
+    }
+    setScanStatus(`読み取り成功 (${std === "micro" ? "マイクロQR" : "rMQR"})`);
+    selectStandard(std);
+  }
+
   function decodeCanvas(offCanvas) {
     const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
     const binarizer = new ZXing.HybridBinarizer(luminanceSource);
@@ -1382,20 +1562,8 @@
     throw lastErr;
   }
 
-  /* 読み取ったコードの明暗モジュールの平均色を、背景色・本体色として採用する */
-  function sampleScanColors(offCanvas, points) {
-    if (!points || points.length === 0) return null;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of points) {
-      const x = p.getX(), y = p.getY();
-      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-    }
-    const padX = (maxX - minX) * 0.08, padY = (maxY - minY) * 0.08;
-    const x0 = Math.max(0, Math.floor(minX - padX));
-    const y0 = Math.max(0, Math.floor(minY - padY));
-    const w = Math.min(offCanvas.width - x0, Math.ceil(maxX - minX + padX * 2));
-    const h = Math.min(offCanvas.height - y0, Math.ceil(maxY - minY + padY * 2));
+  /* 指定した矩形領域内の画素を明暗2群に分け、それぞれの平均色を返す */
+  function sampleScanColorsInBox(offCanvas, x0, y0, w, h) {
     if (w < 1 || h < 1) return null;
     const data = offCanvas.getContext("2d").getImageData(x0, y0, w, h).data;
     const lums = new Float32Array(data.length / 4);
@@ -1416,6 +1584,23 @@
       return `#${[sum[0], sum[1], sum[2]].map((v) => Math.round(v / n).toString(16).padStart(2, "0")).join("")}`;
     };
     return { fg: toHex(dark, darkN), bg: toHex(light, lightN) };
+  }
+
+  /* 読み取ったコードの明暗モジュールの平均色を、背景色・本体色として採用する (ZXing の結果点群から) */
+  function sampleScanColors(offCanvas, points) {
+    if (!points || points.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      const x = p.getX(), y = p.getY();
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    }
+    const padX = (maxX - minX) * 0.08, padY = (maxY - minY) * 0.08;
+    const x0 = Math.max(0, Math.floor(minX - padX));
+    const y0 = Math.max(0, Math.floor(minY - padY));
+    const w = Math.min(offCanvas.width - x0, Math.ceil(maxX - minX + padX * 2));
+    const h = Math.min(offCanvas.height - y0, Math.ceil(maxY - minY + padY * 2));
+    return sampleScanColorsInBox(offCanvas, x0, y0, w, h);
   }
 
   function setScanStatus(text, isError) {
@@ -1518,6 +1703,7 @@
 
     const off = document.createElement("canvas");
     const octx = off.getContext("2d", { willReadFrequently: true });
+    let frameCount = 0;
     const loop = () => {
       if (!scanStream) return;
       if (scanVideo.videoWidth > 0) {
@@ -1530,7 +1716,18 @@
           handleScanResult(result, decodedCanvas);
           return;
         } catch (e) {
-          // このフレームでは見つからなかった。次のフレームで再試行する
+          // このフレームでは見つからなかった。マイクロQR/rMQR用の自前検出も
+          // 毎フレームだと重いため、数フレームに一度だけ試す
+          frameCount++;
+          if (frameCount % 3 === 0) {
+            const small = scaleCanvasTo(off, 500);
+            const found = tryDecodeMicroRmqr(small);
+            if (found) {
+              stopCameraScan();
+              handleCustomDecodeResult(found, small);
+              return;
+            }
+          }
         }
       }
       scanRAF = requestAnimationFrame(loop);
@@ -1551,7 +1748,12 @@
         const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, IMAGE_FALLBACK_SIZES);
         handleScanResult(result, decodedCanvas);
       } catch (e) {
-        setScanStatus("コードが見つかりませんでした", true);
+        const found = tryDecodeMicroRmqr(off);
+        if (found) {
+          handleCustomDecodeResult(found, off);
+        } else {
+          setScanStatus("コードが見つかりませんでした", true);
+        }
       }
     };
     img.onerror = () => {
