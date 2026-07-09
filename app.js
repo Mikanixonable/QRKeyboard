@@ -14,18 +14,26 @@
   const MODE_NAMES = { numeric: "数字", alphanumeric: "英数字", byte: "バイト (UTF-8)" };
   const QR_FAMILY = ["qr", "micro", "rmqr"];
 
+  /* 高さ×幅 -> バージョン番号 (1 始まり) の索引を一度だけ構築する */
+  let rmqrIndex = null;
+  function getRmqrIndex() {
+    if (!rmqrIndex) {
+      rmqrIndex = new Map();
+      for (let i = 0; i < QRLib.RMQR_HEIGHTS.length; i++) {
+        rmqrIndex.set(`${QRLib.RMQR_HEIGHTS[i]}x${QRLib.RMQR_WIDTHS[i]}`, i + 1);
+      }
+    }
+    return rmqrIndex;
+  }
   function rmqrWidthsFor(h) {
     const widths = [];
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < QRLib.RMQR_HEIGHTS.length; i++) {
       if (QRLib.RMQR_HEIGHTS[i] === h) widths.push(QRLib.RMQR_WIDTHS[i]);
     }
     return widths;
   }
   function rmqrVersionOf(h, w) {
-    for (let i = 0; i < 32; i++) {
-      if (QRLib.RMQR_HEIGHTS[i] === h && QRLib.RMQR_WIDTHS[i] === w) return i + 1;
-    }
-    return 0;
+    return getRmqrIndex().get(`${h}x${w}`) || 0;
   }
 
   /* 規格ごとの選択状態 */
@@ -792,15 +800,26 @@
     return structuredNow ? "combined" : state.contentPlacement;
   }
 
-  /* 個々のコードの内容 (QR 系は行列からリアルタイム復号、それ以外は元テキストの断片) */
+  /* 個々のコードの内容 (QR 系は行列からリアルタイム復号、それ以外は元テキストの断片)。
+     drawCurrent/renderInfo が同じ current に対して何度も呼ばれる (キャプション幅の
+     収束計算や色変更時の再描画など) ため、current ごとにキャッシュして毎回の再復号を避ける */
+  function decodedTextAt(i) {
+    if (!current._decodedCache) current._decodedCache = [];
+    if (current._decodedCache[i] === undefined) {
+      try {
+        current._decodedCache[i] = QRLib.decode(current.modulesList[i], state.standard).text;
+      } catch (e) {
+        current._decodedCache[i] = null;
+      }
+    }
+    return current._decodedCache[i];
+  }
+
   function perCodeContentText(i) {
     const std = state.standard;
     if (QR_FAMILY.includes(std)) {
-      try {
-        return QRLib.decode(current.modulesList[i], std).text;
-      } catch (e) {
-        return "(読み取り不能)";
-      }
+      const text = decodedTextAt(i);
+      return text === null ? "(読み取り不能)" : text;
     }
     return current.texts[i];
   }
@@ -808,11 +827,8 @@
   function combinedContentText() {
     const std = state.standard;
     if (QR_FAMILY.includes(std)) {
-      try {
-        return current.results.map((_, i) => QRLib.decode(current.modulesList[i], std).text).join("");
-      } catch (e) {
-        return null;
-      }
+      const texts = current.results.map((_, i) => decodedTextAt(i));
+      return texts.some((t) => t === null) ? null : texts.join("");
     }
     return dataInput.value;
   }
@@ -1406,6 +1422,11 @@
     }
   }
 
+  /* decodeCanvasWithFallback に渡す縮小サイズ候補。カメラは毎フレーム実行されるため
+     試行回数を絞ってレイテンシを優先し、画像アップロードは一度きりなので広く試す */
+  const CAMERA_FALLBACK_SIZES = [null, 400];
+  const IMAGE_FALLBACK_SIZES = [null, 640, 400, 300, 200, 120];
+
   let scanStream = null;
   let scanRAF = null;
 
@@ -1470,7 +1491,7 @@
         off.height = scanVideo.videoHeight;
         octx.drawImage(scanVideo, 0, 0);
         try {
-          const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, [null, 400]);
+          const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, CAMERA_FALLBACK_SIZES);
           stopCameraScan();
           handleScanResult(result, decodedCanvas);
           return;
@@ -1493,7 +1514,7 @@
       off.getContext("2d").drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
       try {
-        const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, [null, 640, 400, 300, 200, 120]);
+        const { result, canvas: decodedCanvas } = decodeCanvasWithFallback(off, IMAGE_FALLBACK_SIZES);
         handleScanResult(result, decodedCanvas);
       } catch (e) {
         setScanStatus("コードが見つかりませんでした", true);
