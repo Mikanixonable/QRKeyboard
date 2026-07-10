@@ -5,6 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const canvas = $("qr-canvas");
   const ctx = canvas.getContext("2d");
+  const qrImage = $("qr-image");
   const qrCard = $("qr-card");
   const qrMessage = $("qr-message");
   const infoEl = $("info");
@@ -453,6 +454,7 @@
         rebuildControls();
         drawCurrent();
         renderInfo();
+        syncUrl();
       }));
     });
   }
@@ -580,17 +582,16 @@
      一致させる (でないと画面表示だけ余白が薄い/濃いといったズレが生じる)。 */
   const MARGIN_RATIO = 0.12;
 
-  /* 内容表示 (文字入れ) のフォントサイズは、デスクトップを想定した絶対px指定
-     だと、表示域が小さいモバイルではコードに対して不釣り合いに大きく見えて
-     しまう。表示域の一辺 (squareSize) がこの基準値以上ならデスクトップと同じ
-     絶対pxを使い、それより小さい場合は比例縮小して同じコード:文字の比率を保つ
-     (可読性のため floorPx を下限とする)。 */
-  const CAPTION_SIZE_REF = 420;
-  function scaledCaptionPx(basePx, minPx, squareSize, dpr, floorBasePx, floorMinPx) {
-    const ratio = Math.min(1, squareSize / CAPTION_SIZE_REF);
+  /* 内容表示 (文字入れ) のフォントサイズは、PNG/SVG書き出し (renderFull*Canvas) と
+     同じ「1モジュールあたりのピクセル数 (scale) に比例させる」基準で決める。
+     以前は画面表示域の絶対サイズを基準にしていたため、書き出し結果と画面表示の
+     文字の見た目の大きさ (コードに対する比率) が食い違っていた
+     (特にモバイルではコード自体が小さく表示されるため、書き出しと比べて
+     文字だけが不釣り合いに大きく見えていた)。 */
+  function captionFontFromScale(scale, dpr) {
     return {
-      base: Math.round(Math.max(floorBasePx, basePx * ratio) * dpr),
-      min: Math.round(Math.max(floorMinPx, minPx * ratio) * dpr),
+      base: Math.max(Math.round(14 * dpr), Math.round(scale * 2.2)),
+      min: Math.max(Math.round(8 * dpr), Math.round(scale)),
     };
   }
 
@@ -675,7 +676,18 @@
     return { fontPx, lines };
   }
 
+  /* canvas への実際の描画に加え、画面に表示する #qr-image (右クリック/長押しで
+     画像として保存できる普通の <img>) の内容を同期する。 */
   function drawCurrent() {
+    drawCurrentToCanvas();
+    if (current && !canvas.hidden) {
+      try { qrImage.src = canvas.toDataURL("image/png"); } catch (e) { /* 稀な失敗時は前回の画像を残す */ }
+    } else {
+      qrImage.removeAttribute("src");
+    }
+  }
+
+  function drawCurrentToCanvas() {
     if (!current) return;
     const results = current.results;
     const box = qrCard.getBoundingClientRect();
@@ -696,10 +708,10 @@
          バーコードを中央揃えで配置する (規格によって配置ロジックが違うと
          見た目の余白比率がバラバラになるため、他規格と統一する)。 */
       const squareSize = Math.max(40, Math.min(availW, availH));
-      const { base: fontPxBase, min: fontPxMin } = scaledCaptionPx(12, 8, squareSize, dpr, 7, 5);
       const budget = Math.max(20, squareSize * (1 - MARGIN_RATIO * 2));
 
       const scale = Math.max(1, Math.floor(budget / totalW));
+      const { base: fontPxBase, min: fontPxMin } = captionFontFromScale(scale, dpr);
       const textH = showText ? Math.round(16 * scale) : 0;
       const barH = Math.max(30 * dpr, Math.min(budget - 16 * dpr - textH, Math.round(totalW * scale * 0.3)));
       const contentW = totalW * scale;
@@ -778,13 +790,15 @@
          MARGIN_RATIO を使い、コード+キャプションが正方形の中央に一定の余白を
          残して収まるようにすることで、両者の見た目を一致させる。 */
       const squareSize = Math.max(40, Math.min(availW, availH));
-      const { base: fontPxBase, min: fontPxMin } = scaledCaptionPx(12, 8, squareSize, dpr, 7, 5);
       const budget = Math.max(20, squareSize * (1 - MARGIN_RATIO * 2));
 
       /* キャプション幅は最終的なコード幅 (mw*scale) に依存し、その幅は
          キャプションの高さにも依存するため、収束するまで数回計算し直す。
-         行数上限に収まらない場合は、収まるまでフォントを縮小する。 */
+         行数上限に収まらない場合は、収まるまでフォントを縮小する。
+         フォントサイズ自体は、キャプションを考慮しない初期の scale 推定値から
+         決める (書き出しの renderFullSingleCanvas と同じ基準にするため)。 */
       let scale = Math.max(1, Math.floor(Math.min(budget / mw, budget / mh)));
+      const { base: fontPxBase, min: fontPxMin } = captionFontFromScale(scale, dpr);
       let lines = [];
       let captionFontPx = fontPxBase;
       let captionH = 0;
@@ -863,9 +877,16 @@
     const squareSizeMulti = Math.max(40, Math.min(availW, availH));
     const budgetW = Math.max(20, squareSizeMulti * (1 - MARGIN_RATIO * 2));
     const budgetH = budgetW;
+    const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
 
-    const { base: cellFontPxBase, min: cellFontPxMin } = scaledCaptionPx(10, 7, squareSizeMulti, dpr, 6, 5);
+    /* フォントサイズは、キャプションを考慮しない (書き出しの renderFullMultiCanvas と
+       同じ基準の) scale 推定値から決める */
     const cellWEstimate = (budgetW - gap * (cols - 1)) / cols;
+    const cellHEstimate = (budgetH - gap * (rows - 1)) / rows;
+    let scaleEstimate = Infinity;
+    for (const { mw, mh } of dims) scaleEstimate = Math.min(scaleEstimate, Math.floor(Math.min(cellWEstimate / mw, cellHEstimate / mh)));
+    scaleEstimate = Math.max(1, scaleEstimate);
+    const { base: cellFontPxBase, min: cellFontPxMin } = captionFontFromScale(scaleEstimate, dpr);
     /* 全コードのキャプションが2行に収まる、共通で使える最大フォントサイズを探す */
     let cellFontPx = cellFontPxBase;
     let cellLines = [];
@@ -887,7 +908,7 @@
     const maxCellLines = showCaptions ? Math.max(...cellLines.map((l) => l.length)) : 0;
     const captionH = showCaptions ? maxCellLines * cellLineH + Math.round(4 * dpr) : 0;
 
-    const { base: combinedFontPxBase, min: combinedFontPxMin } = scaledCaptionPx(10, 7, squareSizeMulti, dpr, 6, 5);
+    const { base: combinedFontPxBase, min: combinedFontPxMin } = captionFontFromScale(scaleEstimate, dpr);
     const combinedRaw = combinedContentText();
     const combinedFit = showCombined
       ? fitCaptionLines(ctx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, budgetW - 8 * dpr, 2, combinedFontPxBase, combinedFontPxMin)
@@ -900,7 +921,6 @@
     const gridAvailH = budgetH - combinedH;
     const cellW = (budgetW - gap * (cols - 1)) / cols;
     const cellH = (gridAvailH - gap * (rows - 1)) / rows - captionH;
-    const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
     let scale = Infinity;
     for (const { mw, mh } of dims) scale = Math.min(scale, Math.floor(Math.min(cellW / mw, cellH / mh)));
     scale = Math.max(1, scale);
@@ -1091,6 +1111,8 @@
     current = null;
     lastDraw = null;
     canvas.hidden = true;
+    qrImage.hidden = true;
+    qrImage.removeAttribute("src");
     qrMessage.hidden = false;
     qrMessage.textContent = message;
     /* info は非表示にせず空にするだけにして、
@@ -1113,10 +1135,11 @@
         edited: false,
       };
       canvas.hidden = false;
+      qrImage.hidden = false;
       qrMessage.hidden = true;
       editReset.hidden = true;
       const editable = results.length === 1 && QR_FAMILY.includes(std);
-      canvas.classList.toggle("editable", editable);
+      qrImage.classList.toggle("editable", editable);
       buildContentDisplayControl();
       buildVersionControl();
       drawCurrent();
@@ -1145,6 +1168,8 @@
     params.set("obg", state.outerBg);
     if (state.outerSame) params.set("same", "1");
     if (std === "qr" && state.splitMode !== "simple") params.set("split", state.splitMode);
+    if (state.showContent) params.set("content", "1");
+    if (state.contentPlacement !== "combined") params.set("cplace", state.contentPlacement);
 
     if (std === "qr" || std === "micro" || std === "rmqr") {
       params.set("ec", st.ec);
@@ -1188,11 +1213,14 @@
     if (params.has("obg")) state.outerBg = params.get("obg");
     state.outerSame = params.get("same") === "1";
     if (params.has("split")) state.splitMode = params.get("split");
+    state.showContent = params.get("content") === "1";
+    if (params.has("cplace")) state.contentPlacement = params.get("cplace");
     $("color-fg").value = state.fg;
     $("color-bg").value = state.bg;
     $("color-outer").value = state.outerBg;
     $("color-outer").disabled = state.outerSame;
     $("color-outer-same").checked = state.outerSame;
+    $("show-content-toggle").checked = state.showContent;
 
     const st = state[std];
     if (params.has("ec")) st.ec = std === "aztec" ? Number(params.get("ec")) : params.get("ec");
@@ -1237,7 +1265,7 @@
 
   /* ---------- 編集 (単一の QR 系コードのみ) ---------- */
 
-  canvas.addEventListener("click", (ev) => {
+  qrImage.addEventListener("click", (ev) => {
     if (!current || !lastDraw || current.results.length !== 1 || !QR_FAMILY.includes(state.standard)) return;
     const rect = canvas.getBoundingClientRect();
     const { scale, qz, dpr, originX, originY } = lastDraw;
@@ -1937,11 +1965,11 @@
 
   function handleCustomDecodeResult(found, offCanvas) {
     const { std, decoded, box } = found;
-    const x0 = Math.max(0, Math.floor(box.x0));
-    const y0 = Math.max(0, Math.floor(box.y0));
-    const w = Math.min(offCanvas.width - x0, Math.ceil(box.w));
-    const h = Math.min(offCanvas.height - y0, Math.ceil(box.h));
-    const colors = sampleScanColorsInBox(offCanvas, x0, y0, w, h);
+    /* box はコード本体 (クワイエットゾーンを含まないモジュールぶんの矩形) なので、
+       その外側にクワイエットゾーンぶんの余白を確保した矩形を背景色抽出用に使う */
+    const inner = clampBox(offCanvas, box.x0, box.y0, box.w, box.h);
+    const outer = clampBox(offCanvas, box.x0 - box.w * 0.2, box.y0 - box.h * 0.2, box.w * 1.4, box.h * 1.4);
+    const colors = sampleScanColorsDual(offCanvas, inner, outer);
     if (colors) {
       if (colors.fg) state.fg = colors.fg;
       if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
@@ -1969,11 +1997,15 @@
     selectStandard(std);
   }
 
+  /* 背景が暗色・コードが明色の反転配色は、通常の二値化では読み取れないため、
+     失敗時は輝度を反転させて再試行する */
   function decodeCanvas(offCanvas) {
     const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
-    const binarizer = new ZXing.HybridBinarizer(luminanceSource);
-    const bitmap = new ZXing.BinaryBitmap(binarizer);
-    return zxingReader.decode(bitmap);
+    try {
+      return zxingReader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource)));
+    } catch (e) {
+      return zxingReader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource.invert())));
+    }
   }
 
   function scaleCanvasTo(source, maxDim) {
@@ -2001,31 +2033,69 @@
     throw lastErr;
   }
 
-  /* 指定した矩形領域内の画素を明暗2群に分け、それぞれの平均色を返す */
-  function sampleScanColorsInBox(offCanvas, x0, y0, w, h) {
-    if (w < 1 || h < 1) return null;
-    const data = offCanvas.getContext("2d").getImageData(x0, y0, w, h).data;
-    const lums = new Float32Array(data.length / 4);
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      lums[j] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  /* 矩形領域の座標をキャンバス範囲内に丸める */
+  function clampBox(offCanvas, x0, y0, w, h) {
+    const cx0 = Math.max(0, Math.floor(x0));
+    const cy0 = Math.max(0, Math.floor(y0));
+    const cw = Math.min(offCanvas.width - cx0, Math.ceil(w));
+    const ch = Math.min(offCanvas.height - cy0, Math.ceil(h));
+    return { x0: cx0, y0: cy0, w: cw, h: ch };
+  }
+
+  /* コードの背景色 (クワイエットゾーン) と本体色を、それぞれ専用の領域から抽出する。
+   * 背景色は inner (コード本体の矩形) の外側・outer の内側の「クワイエットゾーンの輪」
+   * だけを平均する。以前は inner 全体を明暗2群に単純分割していたため、コード内部の
+   * モジュールの色が混ざり込みコントラストが落ちていた。
+   * 本体色は、inner 内の画素のうち背景色から最も離れた側 (中央値で分割) を採用する。
+   * 輝度の明暗ではなく実測した背景色からの距離で判定するため、背景が暗色・コードが
+   * 明色の反転配色でも正しく本体色/背景色を判別できる。 */
+  function sampleScanColorsDual(offCanvas, inner, outer) {
+    if (outer.w < 1 || outer.h < 1 || inner.w < 1 || inner.h < 1) return null;
+    const ctx2d = offCanvas.getContext("2d");
+    const outerData = ctx2d.getImageData(outer.x0, outer.y0, outer.w, outer.h).data;
+    const bgSum = [0, 0, 0];
+    let bgN = 0;
+    for (let y = 0; y < outer.h; y++) {
+      const py = outer.y0 + y;
+      const insideInnerY = py >= inner.y0 && py < inner.y0 + inner.h;
+      for (let x = 0; x < outer.w; x++) {
+        if (insideInnerY) {
+          const px = outer.x0 + x;
+          if (px >= inner.x0 && px < inner.x0 + inner.w) continue;
+        }
+        const idx = (y * outer.w + x) * 4;
+        bgSum[0] += outerData[idx]; bgSum[1] += outerData[idx + 1]; bgSum[2] += outerData[idx + 2];
+        bgN++;
+      }
     }
-    const sorted = Array.from(lums).sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const dark = [0, 0, 0], light = [0, 0, 0];
-    let darkN = 0, lightN = 0;
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      const target = lums[j] < median ? dark : light;
-      target[0] += data[i]; target[1] += data[i + 1]; target[2] += data[i + 2];
-      if (lums[j] < median) darkN++; else lightN++;
+    if (bgN === 0) return null;
+    const bgRef = [bgSum[0] / bgN, bgSum[1] / bgN, bgSum[2] / bgN];
+
+    const innerData = ctx2d.getImageData(inner.x0, inner.y0, inner.w, inner.h).data;
+    const dists = new Float32Array(innerData.length / 4);
+    for (let i = 0, j = 0; i < innerData.length; i += 4, j++) {
+      const dr = innerData[i] - bgRef[0], dg = innerData[i + 1] - bgRef[1], db = innerData[i + 2] - bgRef[2];
+      dists[j] = dr * dr + dg * dg + db * db;
+    }
+    const sortedDists = Array.from(dists).sort((a, b) => a - b);
+    const median = sortedDists[Math.floor(sortedDists.length / 2)];
+    const fgSum = [0, 0, 0];
+    let fgN = 0;
+    for (let i = 0, j = 0; i < innerData.length; i += 4, j++) {
+      if (dists[j] > median) {
+        fgSum[0] += innerData[i]; fgSum[1] += innerData[i + 1]; fgSum[2] += innerData[i + 2];
+        fgN++;
+      }
     }
     const toHex = (sum, n) => {
       if (n === 0) return null;
-      return `#${[sum[0], sum[1], sum[2]].map((v) => Math.round(v / n).toString(16).padStart(2, "0")).join("")}`;
+      return `#${sum.map((v) => Math.round(v / n).toString(16).padStart(2, "0")).join("")}`;
     };
-    return { fg: toHex(dark, darkN), bg: toHex(light, lightN) };
+    return { fg: toHex(fgSum, fgN), bg: toHex(bgSum, bgN) };
   }
 
-  /* 読み取ったコードの明暗モジュールの平均色を、背景色・本体色として採用する (ZXing の結果点群から) */
+  /* 読み取ったコードの本体色・背景色を、ZXing の結果点群 (位置検出パターン等) から
+     推定した矩形をもとに抽出する */
   function sampleScanColors(offCanvas, points) {
     if (!points || points.length === 0) return null;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -2034,12 +2104,24 @@
       minX = Math.min(minX, x); maxX = Math.max(maxX, x);
       minY = Math.min(minY, y); maxY = Math.max(maxY, y);
     }
-    const padX = (maxX - minX) * 0.08, padY = (maxY - minY) * 0.08;
-    const x0 = Math.max(0, Math.floor(minX - padX));
-    const y0 = Math.max(0, Math.floor(minY - padY));
-    const w = Math.min(offCanvas.width - x0, Math.ceil(maxX - minX + padX * 2));
-    const h = Math.min(offCanvas.height - y0, Math.ceil(maxY - minY + padY * 2));
-    return sampleScanColorsInBox(offCanvas, x0, y0, w, h);
+    /* 結果点群 (位置検出パターンの中心) はコード端から約3.5モジュール内側に
+       あるため、コード全体を覆うには spanX/spanY だけでは足りない。この
+       「あと何モジュール分外側まで広げるべきか」の必要割合はモジュール数
+       (=コードの複雑さ) に反比例するため、span に対する固定割合では
+       低モジュール数のコードには不足し、高モジュール数のコードには過剰になる。
+       そこで、実際にキャンバス上でコード外側に残っている余白 (finder 矩形から
+       キャンバス端までの距離) を上限として使い、どちらのケースでも
+       背景の輪が潰れたり本体色に汚染されたりしないようにする。 */
+    const spanX = maxX - minX, spanY = maxY - minY;
+    const marginX = Math.min(minX, offCanvas.width - maxX);
+    const marginY = Math.min(minY, offCanvas.height - maxY);
+    const innerPadX = Math.min(spanX * 0.35, marginX * 0.6);
+    const innerPadY = Math.min(spanY * 0.35, marginY * 0.6);
+    const outerPadX = Math.min(spanX * 0.6, marginX * 0.9);
+    const outerPadY = Math.min(spanY * 0.6, marginY * 0.9);
+    const inner = clampBox(offCanvas, minX - innerPadX, minY - innerPadY, spanX + innerPadX * 2, spanY + innerPadY * 2);
+    const outer = clampBox(offCanvas, minX - outerPadX, minY - outerPadY, spanX + outerPadX * 2, spanY + outerPadY * 2);
+    return sampleScanColorsDual(offCanvas, inner, outer);
   }
 
   function setScanStatus(text, isError) {
@@ -2132,6 +2214,7 @@
       });
     });
     canvas.hidden = true;
+    qrImage.hidden = true;
     qrMessage.hidden = true;
     editReset.hidden = true;
     scanVideo.hidden = false;
@@ -2337,6 +2420,7 @@
     rebuildControls();
     drawCurrent();
     renderInfo();
+    syncUrl();
   });
 
   new ResizeObserver(() => {

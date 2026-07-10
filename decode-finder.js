@@ -315,12 +315,16 @@
     return orientations;
   }
 
-  /* MicroQR (4 型番) と rMQR (32 型番) を、検出した位置検出パターンを起点に総当たりで試す */
-  function tryDecodeMicroRmqr(offCanvas) {
-    if (typeof ZXing === "undefined") return null;
-    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
-    const binarizer = new ZXing.HybridBinarizer(luminanceSource);
-    const matrix = new ZXing.BinaryBitmap(binarizer).getBlackMatrix();
+  /* 二値化行列を反転させたビュー (背景が暗色・コードが明色の反転配色に対応するため) */
+  function invertMatrix(matrix) {
+    return {
+      getWidth: () => matrix.getWidth(),
+      getHeight: () => matrix.getHeight(),
+      get: (x, y) => !matrix.get(x, y),
+    };
+  }
+
+  function tryDecodeFromMatrix(matrix) {
     const candidates = findFinderCandidates(matrix).slice(0, 5);
     for (const cand of candidates) {
       for (const ori of finderOrientations(matrix, cand)) {
@@ -341,6 +345,16 @@
       }
     }
     return null;
+  }
+
+  /* MicroQR (4 型番) と rMQR (32 型番) を、検出した位置検出パターンを起点に総当たりで試す。
+     通常配色で見つからなければ、背景が暗色・コードが明色の反転配色として再試行する。 */
+  function tryDecodeMicroRmqr(offCanvas) {
+    if (typeof ZXing === "undefined") return null;
+    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
+    const binarizer = new ZXing.HybridBinarizer(luminanceSource);
+    const matrix = new ZXing.BinaryBitmap(binarizer).getBlackMatrix();
+    return tryDecodeFromMatrix(matrix) || tryDecodeFromMatrix(invertMatrix(matrix));
   }
 
   window.FinderLib = { tryDecodeMicroRmqr };

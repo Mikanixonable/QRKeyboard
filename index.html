@@ -271,7 +271,8 @@
         <label for="qr-zone">出力部</label>
         <div class="qr-frame">
           <div class="qr-card" id="qr-card">
-            <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>
+            <canvas id="qr-canvas" aria-hidden="true"></canvas>
+            <img id="qr-image" alt="生成されたコード">
             <video id="scan-video" hidden playsinline muted aria-label="カメラ映像"></video>
             <p class="qr-message" id="qr-message" hidden></p>
             <button type="button" class="small-button edit-reset" id="edit-reset" hidden>編集をリセット</button>
