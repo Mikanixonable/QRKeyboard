@@ -347,6 +347,227 @@
     return { bits, display: digits + check, name: "GS1 DataBar-14", quietLeft: 10, quietRight: 10 };
   }
 
+  /* ===== UPC-A ===== */
+  /* UPC-A は EAN-13 の先頭桁を 0 に固定した特殊形と等価 (バーパターンは同一)。
+     11桁 (システム番号+データ) または検査数字込み12桁で入力する。 */
+  function encodeUPCA(text) {
+    if (!/^\d{11,12}$/.test(text)) {
+      throw new BAREncodeError("INVALID_CHARS", "UPC-A は数字 11 桁 (または検査数字込み 12 桁) で入力してください");
+    }
+    const inner = encodeEAN13("0" + text);
+    return { bits: inner.bits, display: inner.display.slice(1), name: "UPC-A", quietLeft: 9, quietRight: 9 };
+  }
+
+  /* ===== UPC-E (ゼロサプレス) ===== */
+  /* GS1 General Specifications の UPC-E 展開規則。末尾桁により
+     11桁の UPC-A ボディへ展開する。 */
+  function upcEExpand(ns, d) {
+    const last = d[5];
+    let body;
+    if (last <= 2) body = [ns, d[0], d[1], last, 0, 0, 0, 0, d[2], d[3], d[4]];
+    else if (last === 3) body = [ns, d[0], d[1], d[2], 0, 0, 0, 0, 0, d[3], d[4]];
+    else if (last === 4) body = [ns, d[0], d[1], d[2], d[3], 0, 0, 0, 0, 0, d[4]];
+    else body = [ns, d[0], d[1], d[2], d[3], d[4], 0, 0, 0, 0, last];
+    return body.join("");
+  }
+  const UPCE_PARITY = {
+    0: ["BBBAAA", "BBABAA", "BBAABA", "BBAAAB", "BABBAA", "BAABBA", "BAAABB", "BABABA", "BABAAB", "BAABAB"],
+    1: ["AAABBB", "AABABB", "AABBAB", "AABBBA", "ABAABB", "ABBAAB", "ABBBAA", "ABABAB", "ABABBA", "ABBABA"],
+  };
+  function encodeUPCE(text) {
+    let ns, digits6, checkIn;
+    if (/^\d{6}$/.test(text)) { ns = 0; digits6 = text; checkIn = null; }
+    else if (/^\d{7}$/.test(text)) { ns = 0; digits6 = text.slice(0, 6); checkIn = text[6]; }
+    else if (/^[01]\d{6}$/.test(text)) { ns = Number(text[0]); digits6 = text.slice(1); checkIn = null; }
+    else if (/^[01]\d{7}$/.test(text)) { ns = Number(text[0]); digits6 = text.slice(1, 7); checkIn = text[7]; }
+    else {
+      throw new BAREncodeError("INVALID_CHARS",
+        "UPC-E は数字6桁 (先頭にシステム番号0/1、末尾に検査数字を付加可) で入力してください");
+    }
+    const d = digits6.split("").map(Number);
+    const body11 = upcEExpand(ns, d);
+    const check = gtinCheckDigit(body11);
+    if (checkIn != null && checkIn !== check) {
+      throw new BAREncodeError("INVALID_CHARS", "検査数字が不正です (正: " + check + ")");
+    }
+    const parityPattern = UPCE_PARITY[ns][Number(check)];
+    let bits = "101";
+    for (let i = 0; i < 6; i++) {
+      const L = EAN_L[d[i]];
+      bits += parityPattern[i] === "A" ? L : L.split("").reverse().map((c) => (c === "0" ? "1" : "0")).join("");
+    }
+    bits += "010101";
+    return { bits, display: String(ns) + digits6 + check, name: "UPC-E", quietLeft: 9, quietRight: 9 };
+  }
+
+  /* ===== Codabar ===== */
+  /* ANSI/AIM BC3-1995。数字と開始終了 A-D に対応 (記号 - $ : / . + は
+     テーブルの信頼できる出典を確認できなかったため今回は非対応)。
+     各文字は 4 バー + 3 スペース = 7 エレメント、うち2つが幅広。 */
+  const CODABAR_CHARS = "0123456789ABCD";
+  const CODABAR_WIDTHS = [
+    "1111122", "1111221", "1112112", "2211111", "1121121",
+    "2111121", "1211112", "1211211", "1221111", "2112111",
+    "1212121", "1121112", "1122121", "1212112",
+  ];
+  function encodeCodabar(text) {
+    const t = text.toUpperCase();
+    if (t.length < 2 || !"ABCD".includes(t[0]) || !"ABCD".includes(t[t.length - 1])) {
+      throw new BAREncodeError("INVALID_CHARS", "Codabar は開始/終了文字 (A-D) を含めて入力してください (例: A123B)");
+    }
+    let bits = "";
+    for (let i = 0; i < t.length; i++) {
+      const idx = CODABAR_CHARS.indexOf(t[i]);
+      if (idx < 0) {
+        throw new BAREncodeError("INVALID_CHARS",
+          "Codabar で使用できない文字です (使用可能: 数字と開始終了 A-D)");
+      }
+      const widths = CODABAR_WIDTHS[idx];
+      let bar = true;
+      for (const wch of widths) {
+        bits += (bar ? "1" : "0").repeat(Number(wch));
+        bar = !bar;
+      }
+      if (i < t.length - 1) bits += "0"; // 文字間ギャップ (1 モジュール幅の明部)
+    }
+    return { bits, display: t, name: "Codabar", quietLeft: 10, quietRight: 10 };
+  }
+
+  /* ===== Code 93 ===== */
+  const C93_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
+  /* AIM USS-93。各文字9モジュール幅 (3バー+3スペース)。 */
+  const C93 = [
+    "131112", "111213", "111312", "111411", "121113", "121212", "121311", "111114",
+    "131211", "141111", "211113", "211212", "211311", "221112", "221211", "231111",
+    "112113", "112212", "112311", "122112", "132111", "111123", "111222", "111321",
+    "121122", "131121", "212112", "212211", "211122", "211221", "221121", "222111",
+    "112122", "112221", "122121", "123111", "121131", "311112", "311211", "321111",
+    "112131", "113121", "211131", "121221", "312111", "311121", "122211",
+  ];
+  const C93_START = "111141", C93_STOP = "1111411";
+  function code93Checksum(values, weightMax) {
+    let sum = 0, weight = 1;
+    for (let i = values.length - 1; i >= 0; i--) {
+      sum += values[i] * weight;
+      weight++;
+      if (weight > weightMax) weight = 1;
+    }
+    return sum % 47;
+  }
+  function encodeCode93(text) {
+    const values = [];
+    for (const ch of text) {
+      const idx = C93_CHARS.indexOf(ch);
+      if (idx < 0) {
+        throw new BAREncodeError("INVALID_CHARS",
+          "Code 93 で使用できない文字です (使用可能: 数字・大文字 A-Z・ - . 空白 $ / + %)");
+      }
+      values.push(idx);
+    }
+    if (values.length === 0) throw new BAREncodeError("EMPTY", "データを入力してください");
+    const c = code93Checksum(values, 20);
+    const k = code93Checksum(values.concat([c]), 15);
+    let bits = "";
+    const widthsToBits = (widths) => {
+      let s = "", bar = true;
+      for (const wch of widths) { s += (bar ? "1" : "0").repeat(Number(wch)); bar = !bar; }
+      return s;
+    };
+    bits += widthsToBits(C93_START);
+    for (const v of values) bits += widthsToBits(C93[v]);
+    bits += widthsToBits(C93[c]);
+    bits += widthsToBits(C93[k]);
+    bits += widthsToBits(C93_STOP);
+    return { bits, display: text, name: "Code 93", quietLeft: 10, quietRight: 10 };
+  }
+
+  /* ===== 2 of 5 系 (Industrial 2 of 5 / Interleaved 2 of 5) ===== */
+  /* 各数字を5エレメント (幅広2・狭3) で表す標準パターン */
+  const TOF5_DIGIT = [
+    "NNWWN", "WNNNW", "NWNNW", "WWNNN", "NNWNW",
+    "WNWNN", "NWWNN", "NNNWW", "WNNWN", "NWNWN",
+  ];
+  function tof5Widths(pattern, narrow, wide) {
+    return pattern.split("").map((c) => (c === "W" ? wide : narrow));
+  }
+
+  function encodeIndustrial2of5(text) {
+    if (!/^\d+$/.test(text)) throw new BAREncodeError("INVALID_CHARS", "Industrial 2 of 5 は数字のみ使用できます");
+    let bits = "";
+    const put = (widths, bar) => {
+      let b = bar;
+      for (const w of widths) { bits += (b ? "1" : "0").repeat(w); b = !b; }
+      return b;
+    };
+    put([1, 1, 1, 1], true); // start: bar,space,bar,space (narrow x4)
+    for (const ch of text) {
+      const widths5 = tof5Widths(TOF5_DIGIT[ch.charCodeAt(0) - 48], 1, 2);
+      // 5エレメントはバーのみが情報を持つ (間のスペースは常に狭幅) ので、
+      // バー・狭スペースを交互に組み立てる
+      let b = true;
+      for (const w of widths5) {
+        bits += (b ? "1" : "0").repeat(w);
+        bits += "0"; // 固定狭スペース (このループでは常にバーの直後に置く)
+        b = true;
+      }
+      // 上のループは末尾に余分なスペースを付加するため補正
+      bits = bits.slice(0, bits.length - 1);
+    }
+    put([2, 1, 1], true); // stop: 太バー,狭スペース,狭バー
+    return { bits, display: text, name: "Industrial 2 of 5", quietLeft: 10, quietRight: 10 };
+  }
+
+  function encodeInterleaved2of5(text) {
+    if (!/^\d+$/.test(text)) throw new BAREncodeError("INVALID_CHARS", "Interleaved 2 of 5 は数字のみ使用できます");
+    const digits = text.length % 2 === 1 ? "0" + text : text;
+    let bits = "1010"; // start (狭バー,狭スペース,狭バー,狭スペース = NN NN 相当を簡易表現)
+    for (let i = 0; i < digits.length; i += 2) {
+      const barW = tof5Widths(TOF5_DIGIT[digits.charCodeAt(i) - 48], 1, 2);
+      const spcW = tof5Widths(TOF5_DIGIT[digits.charCodeAt(i + 1) - 48], 1, 2);
+      for (let k = 0; k < 5; k++) {
+        bits += "1".repeat(barW[k]);
+        bits += "0".repeat(spcW[k]);
+      }
+    }
+    bits += "1101"; // stop: 太バー,狭スペース,狭バー (幅2,1,1)
+    return { bits, display: digits, name: "Interleaved 2 of 5", quietLeft: 10, quietRight: 10 };
+  }
+
+  function encodeITF14(text) {
+    if (!/^\d{13,14}$/.test(text)) {
+      throw new BAREncodeError("INVALID_CHARS", "ITF-14 は数字13桁 (または検査数字込み14桁) で入力してください");
+    }
+    const body = text.slice(0, 13);
+    const check = gtinCheckDigit(body);
+    if (text.length === 14 && text[13] !== check) {
+      throw new BAREncodeError("INVALID_CHARS", "検査数字が不正です (正: " + check + ")");
+    }
+    const inner = encodeInterleaved2of5(body + check);
+    return { ...inner, name: "ITF-14", quietLeft: 10, quietRight: 10 };
+  }
+
+  /* ===== Pharmacode ===== */
+  /* 2進表現そのもの (値+1 の2進数を LSB 側から、0=狭バー・1=太バーとして
+     バーのみを並べ、間は常に狭スペース)。3〜131070 の範囲。 */
+  function encodePharmacode(text) {
+    const n = Number(text);
+    if (!/^\d+$/.test(text) || !Number.isInteger(n) || n < 3 || n > 131070) {
+      throw new BAREncodeError("INVALID_CHARS", "Pharmacode は 3〜131070 の整数で入力してください");
+    }
+    const barsRev = [];
+    let v = n;
+    while (v > 0) {
+      if (v % 2 === 1) { barsRev.push(1); v = (v - 1) / 2; } else { barsRev.push(2); v = (v - 2) / 2; }
+    }
+    const bars = barsRev.reverse();
+    let bits = "";
+    for (let i = 0; i < bars.length; i++) {
+      bits += "1".repeat(bars[i]);
+      if (i < bars.length - 1) bits += "0";
+    }
+    return { bits, display: text, name: "Pharmacode", quietLeft: 10, quietRight: 10 };
+  }
+
   function encode(options) {
     const text = options.text;
     if (typeof text !== "string" || text.length === 0) {
@@ -358,6 +579,14 @@
       case "code128": r = encodeCode128(text); break;
       case "code39": r = encodeCode39(text); break;
       case "gs1databar": r = encodeGS1DataBar(text); break;
+      case "upca": r = encodeUPCA(text); break;
+      case "upce": r = encodeUPCE(text); break;
+      case "codabar": r = encodeCodabar(text); break;
+      case "code93": r = encodeCode93(text); break;
+      case "itf": r = encodeInterleaved2of5(text); break;
+      case "itf14": r = encodeITF14(text); break;
+      case "industrial2of5": r = encodeIndustrial2of5(text); break;
+      case "pharmacode": r = encodePharmacode(text); break;
       default: throw new BAREncodeError("BAD_OPTION", "unknown symbology: " + options.symbology);
     }
     const pattern = Uint8Array.from(r.bits, (c) => (c === "1" ? 1 : 0));

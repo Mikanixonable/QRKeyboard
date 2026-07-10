@@ -134,7 +134,7 @@
 - MicroQR・rMQRのデコードで、斜め45度の読み取りができない
 - テスト作りたい
     自動テストが皆無: qrcode.js/datamatrix.js/aztec.js/barcode1d.jsのエンコード/デコードロジックに対する単体テストが一つもなく、リグレッションを機械的に検知できない
-- pdf417に対応して
+
 - 実装コードが増えたら規格の説明がいる。
 
 - デコード時の背景色は、平均色を用いているが、コード色を含めて平均化されるためコントラストが落ちる。そこで、コードの背景色を抽出して背景色として
@@ -147,6 +147,12 @@
     - 二次元コード: Han Xin Code, JAB Code, Boxing barcode, DotCode
     - 二次元(極座標系)コード: MaxiCode, ShotCode,
     - 一次元コード: Automatic Car Identification, Code 11, Code 39, Code 93, Code 128, CodabarEuropean Article Number, GS1 DataBar, Industrial 2 of 5Interleaved 2 of 5, ITF-14, Matrix 2 of 5, MSI Barcode, Patch Code, Pharmacode, PlesseyTelepen, UPC
+以下のコードのエンコード、デコードの実装可能性を調査
+- 二次元コード: Aztec Rune, Code One, Dot Code, Grid Matrix, 
+- 複線式バーコード: CODABLOCK F, Code 49, MicroPDF417, PDF417
+
+
+Aztec Rune, CODABLOCK F, PDF417, UPC-A/UPC-E, Code 93, Codabar, ITF/ITF-14, Industrial・Matrix 2 of 5, MSI, Plessey, Pharmacode, Code 11
 
 - PWA対応して
 - 2つ必要な条件、3つ必要な条件も色分けしたい

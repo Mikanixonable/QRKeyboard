@@ -178,7 +178,12 @@
     if (std === "barcode") {
       const seg = document.createElement("div");
       seg.className = "segmented segmented-vertical";
-      [["JAN / EAN-13", "ean13"], ["Code 128", "code128"], ["Code 39", "code39"], ["GS1 DataBar-14", "gs1databar"]].forEach(([name, sym]) => {
+      [
+        ["JAN / EAN-13", "ean13"], ["Code 128", "code128"], ["Code 39", "code39"],
+        ["GS1 DataBar-14", "gs1databar"], ["UPC-A", "upca"], ["Code 93", "code93"],
+        ["ITF", "itf"], ["ITF-14", "itf14"], ["Industrial 2 of 5", "industrial2of5"],
+        ["Pharmacode", "pharmacode"],
+      ].forEach(([name, sym]) => {
         seg.appendChild(makeSegButton(name, st.symbology === sym, () => {
           st.symbology = sym;
           rebuildControls();
@@ -1960,6 +1965,9 @@
     if (format === F.CODE_39) return { std: "barcode", symbology: "code39" };
     if (format === F.EAN_13) return { std: "barcode", symbology: "ean13" };
     if (format === F.RSS_14) return { std: "barcode", symbology: "gs1databar" };
+    if (format === F.UPC_A) return { std: "barcode", symbology: "upca" };
+    if (format === F.CODE_93) return { std: "barcode", symbology: "code93" };
+    if (format === F.ITF) return { std: "barcode", symbology: "itf" };
     return null;
   }
 
