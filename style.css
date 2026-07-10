@@ -389,6 +389,13 @@ textarea:focus, select:focus, input:focus-visible,
   flex-wrap: wrap;
   gap: 4px;
 }
+.segmented-vertical {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+.segmented-vertical .seg-btn {
+  width: 100%;
+}
 .seg-btn {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -516,7 +523,10 @@ textarea:focus, select:focus, input:focus-visible,
   gap: 6px;
 }
 .decode-group .small-button { width: 100%; }
+/* デスクトップではラベル付きのボタンとして表示し、アイコンは隠す。
+   モバイルではタイトル右のミニ丸ボタン (アイコンのみ) に切り替える (下の @media 参照) */
 #reset-all-btn { width: 100%; }
+.reset-all-icon { display: none; }
 .scan-status {
   font-size: 11px;
   color: var(--text-sub);
@@ -593,6 +603,11 @@ textarea:focus, select:focus, input:focus-visible,
   white-space: nowrap;
 }
 .tile:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.tile-fits {
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+.tile-fits:hover:not(:disabled) { border-color: var(--accent2); color: var(--accent2); }
 .tile[aria-checked="true"] {
   background: var(--accent-weak);
   border-color: var(--accent);
@@ -665,6 +680,27 @@ textarea:focus, select:focus, input:focus-visible,
      (中身は .quick-combo-panel 側に複製済み・説明書きも複製して表示する) */
   .mobile-quick-select { display: flex; flex: 1; gap: 6px; }
   #mobile-scan-status-slot:not(:empty) { margin-top: 4px; }
+  /* 「条件をリセット」ボタンをタイトル右にアイコンのみのミニボタンとして配置し、
+     縦幅を節約する (ラベルは視覚的に隠すが、スクリーンリーダー向けには残す) */
+  #reset-all-btn {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .reset-all-icon { display: inline; font-size: 15px; line-height: 1; }
+  .reset-all-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
   .left-menu-zone > .tabs-vertical { display: none; }
   #scan-camera-btn, #scan-image-btn, .scan-note,
   .tab-category[data-category="decode"] .tab-category-label { display: none; }

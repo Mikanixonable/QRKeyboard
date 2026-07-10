@@ -136,6 +136,34 @@
     }
   }
 
+  /* 指定した型番(複雑度)で現在の入力内容が1コードに収まるか判定する。
+     state を変更せず、ライブラリを直接呼び出して確かめる */
+  function versionFitsSingleCode(std, version) {
+    const text = dataInput.value;
+    if (!text) return false;
+    const st = state[std];
+    try {
+      switch (std) {
+        case "qr":
+        case "micro":
+          QRLib.encode({ standard: std, text, ecLevel: st.ec, version, mask: -1 });
+          return true;
+        case "rmqr":
+          QRLib.encode({ standard: "rmqr", text, ecLevel: st.ec, version });
+          return true;
+        case "datamatrix":
+          DMLib.encode({ text, size: version });
+          return true;
+        case "aztec":
+          AZLib.encode({ text, ecIndex: st.ec, version });
+          return true;
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
   /* ---------- 複雑度(型番)コントロール ---------- */
 
   function buildVersionControl() {
@@ -148,7 +176,7 @@
 
     if (std === "barcode") {
       const seg = document.createElement("div");
-      seg.className = "segmented";
+      seg.className = "segmented segmented-vertical";
       [["JAN / EAN-13", "ean13"], ["Code 128", "code128"], ["Code 39", "code39"], ["GS1 DataBar-14", "gs1databar"]].forEach(([name, sym]) => {
         seg.appendChild(makeSegButton(name, st.symbology === sym, () => {
           st.symbology = sym;
@@ -176,6 +204,7 @@
         items.push({
           label: String(v),
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
+          fits: versionFitsSingleCode("qr", v),
           onClick: () => {
             st.versionAuto = false;
             st.version = v;
@@ -219,6 +248,7 @@
           label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
           title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
           checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
+          fits: versionFitsSingleCode("datamatrix", i + 1),
           onClick: () => {
             st.sizeAuto = false;
             st.size = i + 1;
@@ -237,6 +267,7 @@
           label: `C${l}`,
           title: `コンパクト ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === l : st.version === l,
+          fits: versionFitsSingleCode("aztec", l),
           onClick: () => { st.versionAuto = false; st.version = l; rebuildControls(); render(); },
         });
       }
@@ -249,6 +280,7 @@
           label: `F${l}`,
           title: `フル ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
+          fits: versionFitsSingleCode("aztec", v),
           onClick: () => { st.versionAuto = false; st.version = v; rebuildControls(); render(); },
         });
       }
@@ -268,6 +300,7 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = item.full ? "tile tile-full" : "tile";
+      if (item.fits) btn.classList.add("tile-fits");
       btn.setAttribute("role", "radio");
       btn.setAttribute("aria-checked", item.checked ? "true" : "false");
       btn.disabled = !!item.disabled;
@@ -318,6 +351,7 @@
           ? !!resolved && resolved.height === h && resolved.width === w
           : st.height === h && st.width === w;
         btn.setAttribute("aria-checked", isChecked ? "true" : "false");
+        if (versionFitsSingleCode("rmqr", rmqrVersionOf(h, w))) btn.classList.add("tile-fits");
         btn.title = `R${h} × ${w}`;
         btn.textContent = String(w);
         btn.addEventListener("click", () => {

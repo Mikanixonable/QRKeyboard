@@ -22,6 +22,10 @@
           </svg>
           QRKeyboard
         </h1>
+        <button type="button" class="small-button" id="reset-all-btn" title="条件をリセット">
+          <span class="reset-all-icon" aria-hidden="true">↺</span>
+          <span class="reset-all-label">リセット</span>
+        </button>
         <div class="mobile-quick-select">
           <div class="quick-combo" id="standard-combo">
             <button type="button" class="quick-combo-btn" id="standard-combo-btn" aria-haspopup="listbox" aria-expanded="false">
@@ -257,7 +261,6 @@
           </div>
         </div>
       </div>
-      <button type="button" class="small-button" id="reset-all-btn">条件をリセット</button>
     </nav>
 
     <main class="center-content-zone layout">
@@ -325,10 +328,6 @@
               </div>
             </div>
           </div>
-          <div class="field" id="barcode-text-field" hidden>
-            <label id="barcode-text-label">表示</label>
-            <div id="barcode-text-control"></div>
-          </div>
           <span class="copy-status" id="copy-status"></span>
         </div>
         <div class="field" id="info-field">
@@ -362,6 +361,11 @@
         <div class="field" id="split-mode-field" hidden>
           <label id="split-mode-label">容量超過時の分割方式</label>
           <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
+        </div>
+
+        <div class="field" id="barcode-text-field" hidden>
+          <label id="barcode-text-label">表示</label>
+          <div id="barcode-text-control"></div>
         </div>
       </div>
 
