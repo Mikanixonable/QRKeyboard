@@ -292,19 +292,13 @@ body {
 .right-menu-panel { display: contents; }
 
 /* ---------- 中央コンテンツゾーン ---------- */
-.center-content-zone.layout {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  padding: 12px 16px;
-}
-.preview {
+.center-content-zone.layout.preview {
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 12px 16px;
   gap: 10px;
 }
 
@@ -705,12 +699,12 @@ textarea:focus, select:focus, input:focus-visible,
   #scan-camera-btn, #scan-image-btn, .scan-note,
   .tab-category[data-category="decode"] .tab-category-label { display: none; }
 
-  .center-content-zone.layout {
+  .center-content-zone.layout.preview {
     flex: none;
     flex-direction: column;
     padding: 8px 12px;
+    gap: 8px;
   }
-  .preview { flex: none; gap: 8px; }
 
   /* データ・色は縦並びに */
   .content-top { flex-direction: column; gap: 8px; }
@@ -795,8 +789,7 @@ textarea:focus, select:focus, input:focus-visible,
 /* 縦幅の低いモバイル (iPhone SE 等) では QR 表示域と余白をさらに切り詰める */
 @media (max-width: 760px) and (max-height: 700px) {
   .content-middle { gap: 2px; --qr-frame-width: 190px; }
-  .preview { gap: 6px; }
-  .center-content-zone.layout { padding: 6px 12px; }
+  .center-content-zone.layout.preview { padding: 6px 12px; gap: 6px; }
   .left-menu-zone, .right-menu-zone { padding: 6px 12px; gap: 6px; }
 }
 
