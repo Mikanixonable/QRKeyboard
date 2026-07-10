@@ -91,6 +91,19 @@
     }
   }
 
+  /* 型番(複雑度)選択: 明示指定があれば検証して使い、なければ range を先頭から
+   * 試し最初に収まったものを使う (QR/MicroQR/rMQR の3エンコーダで共通の骨格)。
+   * validateExplicit は BAD_OPTION/INVALID_CHARS など fits 以外の検証用。 */
+  function selectVersion(range, explicit, fits, tooLongMsg, validateExplicit) {
+    if (explicit != null) {
+      if (validateExplicit) validateExplicit(explicit);
+      if (!fits(explicit)) throw new QREncodeError("TOO_LONG", tooLongMsg(explicit));
+      return explicit;
+    }
+    for (const v of range) if (fits(v)) return v;
+    throw new QREncodeError("TOO_LONG", tooLongMsg(null));
+  }
+
   /* ========================================================================
    * データ符号化モード (ISO/IEC 18004 §7.4, ISO/IEC 23941 §7.4)
    * ====================================================================== */
@@ -624,6 +637,7 @@
 
   /* Structured Append (ISO/IEC 18004 §8) のヘッダ長: モード(4) + 記号位置(4) + 記号数-1(4) + パリティ(8) */
   const STRUCTURED_APPEND_BITS = 20;
+  const QR_VERSION_RANGE = Array.from({ length: 40 }, (_, i) => i + 1);
 
   function encodeQR(text, opts) {
     const ecLevel = opts.ecLevel || "M";
@@ -636,23 +650,11 @@
     const headerBits = sa ? STRUCTURED_APPEND_BITS : 0;
 
     // バージョン選択
-    let version = 0;
-    if (opts.version) {
-      version = opts.version;
-      if (headerBits + qrNeededBits(version, mode, charCount, dataBits) > qrCapacityBits(version, ecLevel) ||
-          charCount >= 1 << qrCciBits(version, mode)) {
-        throw new QREncodeError("TOO_LONG", "データがバージョン " + version + " (" + ecLevel + ") の容量を超えています");
-      }
-    } else {
-      for (let v = 1; v <= 40; v++) {
-        if (headerBits + qrNeededBits(v, mode, charCount, dataBits) <= qrCapacityBits(v, ecLevel) &&
-            charCount < 1 << qrCciBits(v, mode)) {
-          version = v;
-          break;
-        }
-      }
-      if (!version) throw new QREncodeError("TOO_LONG", "データが QR コードの最大容量を超えています");
-    }
+    const fitsQR = (v) =>
+      headerBits + qrNeededBits(v, mode, charCount, dataBits) <= qrCapacityBits(v, ecLevel) &&
+      charCount < 1 << qrCciBits(v, mode);
+    const version = selectVersion(QR_VERSION_RANGE, opts.version || null, fitsQR, (v) =>
+      v ? "データがバージョン " + v + " (" + ecLevel + ") の容量を超えています" : "データが QR コードの最大容量を超えています");
 
     // ビット列構築
     const capacityBits = qrCapacityBits(version, ecLevel);
@@ -721,6 +723,7 @@
    * MicroQRコード
    * ====================================================================== */
   const MICRO_EC_IDX = { L: 0, M: 1, Q: 2 };
+  const MICRO_VERSION_RANGE = [1, 2, 3, 4];
 
   function microModeAllowed(version, mode) {
     if (version === 1) return mode === "numeric";
@@ -784,27 +787,18 @@
       return microNeededBits(v, mode, charCount, dataBits) <= cap && charCount < 1 << cci;
     };
 
-    let version = 0;
-    if (opts.version) {
-      version = opts.version;
-      if (MICRO_DATA[ecIdx][version - 1][0] === 0) {
-        throw new QREncodeError("BAD_OPTION", "M" + version + " では誤り訂正レベル " + ecLevel + " は使用できません");
-      }
-      if (!microModeAllowed(version, mode)) {
-        throw new QREncodeError("INVALID_CHARS",
-          version === 1 ? "M1 は数字のみ使用できます" : "M2 は数字と英数字 (0-9 A-Z %*+-./:$ 空白) のみ使用できます");
-      }
-      if (!fits(version)) {
-        throw new QREncodeError("TOO_LONG", "データが M" + version + " (" + ecLevel + ") の容量を超えています");
-      }
-    } else {
-      for (let v = 1; v <= 4; v++) {
-        if (fits(v)) { version = v; break; }
-      }
-      if (!version) {
-        throw new QREncodeError("TOO_LONG", "データがMicroQR (" + ecLevel + ") の最大容量を超えています");
-      }
-    }
+    const version = selectVersion(
+      MICRO_VERSION_RANGE, opts.version || null, fits,
+      (v) => v ? "データが M" + v + " (" + ecLevel + ") の容量を超えています" : "データがMicroQR (" + ecLevel + ") の最大容量を超えています",
+      (v) => {
+        if (MICRO_DATA[ecIdx][v - 1][0] === 0) {
+          throw new QREncodeError("BAD_OPTION", "M" + v + " では誤り訂正レベル " + ecLevel + " は使用できません");
+        }
+        if (!microModeAllowed(v, mode)) {
+          throw new QREncodeError("INVALID_CHARS",
+            v === 1 ? "M1 は数字のみ使用できます" : "M2 は数字と英数字 (0-9 A-Z %*+-./:$ 空白) のみ使用できます");
+        }
+      });
 
     const [capacityBits, dataCw, eccCw] = MICRO_DATA[ecIdx][version - 1];
     const halfLast = version === 1 || version === 3; // 最終データコード語が 4 ビット
@@ -976,23 +970,13 @@
       rmqrNeededBits(vi, mode, charCount, dataBits) <= RMQR_DATA_CW[ecIdx][vi] * 8 &&
       charCount < 1 << RMQR_CCI[mode][vi];
 
-    let vi = -1;
-    if (opts.version) {
-      vi = opts.version - 1;
-      if (vi < 0 || vi > 31) throw new QREncodeError("BAD_OPTION", "rMQR のバージョンが不正です");
-      if (!fits(vi)) {
-        throw new QREncodeError("TOO_LONG",
-          "データが " + RMQR_VERSION_NAMES[vi] + " (" + ecLevel + ") の容量を超えています");
-      }
-    } else {
-      // 自動選択: 収まるうち面積最小 (同面積なら高さが低い方)
-      const order = RMQR_W.map((_, i) => i).sort((a, b) =>
-        RMQR_W[a] * RMQR_H[a] - RMQR_W[b] * RMQR_H[b] || RMQR_H[a] - RMQR_H[b]);
-      for (const i of order) {
-        if (fits(i)) { vi = i; break; }
-      }
-      if (vi < 0) throw new QREncodeError("TOO_LONG", "データが rMQR (" + ecLevel + ") の最大容量を超えています");
-    }
+    // 自動選択時は収まるうち面積最小 (同面積なら高さが低い方) の順で試す
+    const order = RMQR_W.map((_, i) => i).sort((a, b) =>
+      RMQR_W[a] * RMQR_H[a] - RMQR_W[b] * RMQR_H[b] || RMQR_H[a] - RMQR_H[b]);
+    const vi = selectVersion(
+      order, opts.version ? opts.version - 1 : null, fits,
+      (v) => v != null ? "データが " + RMQR_VERSION_NAMES[v] + " (" + ecLevel + ") の容量を超えています" : "データが rMQR (" + ecLevel + ") の最大容量を超えています",
+      (v) => { if (v < 0 || v > 31) throw new QREncodeError("BAD_OPTION", "rMQR のバージョンが不正です"); });
 
     const capacityBits = RMQR_DATA_CW[ecIdx][vi] * 8;
     const bb = new BitBuffer();
@@ -1151,6 +1135,35 @@
       super(message);
       this.name = "QRDecodeError";
     }
+  }
+
+  /* 機能パターン以外のセルへ、読み取った modules をマスク解除しつつ書き戻す
+   * (QR/MicroQR/rMQR の3復号関数で共通) */
+  function unmaskInto(M, modules, maskFn) {
+    for (let y = 0; y < M.height; y++) {
+      for (let x = 0; x < M.width; x++) {
+        if (!M.isFunc(x, y)) M.dark[y * M.width + x] = modules[y][x] ^ (maskFn(y, x) ? 1 : 0);
+      }
+    }
+  }
+
+  /* ブロック分割されたコード語群を RS 復号し、データビット列に平坦化する。
+   * 訂正不能なブロックがあれば例外を投げる (QR/rMQR で共通、単一ブロックにも使える) */
+  function correctInterleavedBlocks(allCw, totalCw, dataCw, numBlocks) {
+    const { blocks, lens, eccPerBlock } = deinterleave(allCw, totalCw, dataCw, numBlocks);
+    let corrected = 0;
+    for (const block of blocks) {
+      const nErr = rsCorrect(block, eccPerBlock);
+      if (nErr < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
+      corrected += nErr;
+    }
+    const dataBits = [];
+    for (let b = 0; b < blocks.length; b++) {
+      for (let i = 0; i < lens[b]; i++) {
+        for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
+      }
+    }
+    return { dataBits, corrected };
   }
 
   /* 配置順にデータ領域のビットを読み出す (placeData と同一の走査) */
@@ -1323,32 +1336,13 @@
     // 機能パターンを再構築し、マスク解除しつつデータビットを読む
     const M = new Matrix(size, size);
     buildQRFunctionPatterns(M, version);
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        if (!M.isFunc(x, y)) {
-          M.dark[y * size + x] = modules[y][x] ^ (maskPredicate(mask, y, x) ? 1 : 0);
-        }
-      }
-    }
+    unmaskInto(M, modules, (y, x) => maskPredicate(mask, y, x));
     const bits = readPlacedBits(M, true, size - 1);
     const totalCw = QR_TOTAL_CW[version - 1];
-    const allCw = new Uint8Array(totalCw);
-    for (let i = 0; i < totalCw * 8; i++) allCw[i >> 3] |= bits[i] << (7 - (i & 7));
+    const allCw = bitsToBytes(bits.slice(0, totalCw * 8));
 
     const dataCw = QR_DATA_CW[ecIdx][version - 1];
-    const { blocks, lens, eccPerBlock } = deinterleave(allCw, totalCw, dataCw, QR_BLOCKS[ecIdx][version - 1]);
-    let corrected = 0;
-    const dataBits = [];
-    for (let b = 0; b < blocks.length; b++) {
-      const nErr = rsCorrect(blocks[b], eccPerBlock);
-      if (nErr < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
-      corrected += nErr;
-    }
-    for (let b = 0; b < blocks.length; b++) {
-      for (let i = 0; i < lens[b]; i++) {
-        for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
-      }
-    }
+    const { dataBits, corrected } = correctInterleavedBlocks(allCw, totalCw, dataCw, QR_BLOCKS[ecIdx][version - 1]);
     const { text, structured } = parseBitStream(dataBits, "qr", version);
     return { text, corrected, ecLevel, mask, versionName: String(version), formatDistance: bestDist, structured };
   }
@@ -1378,13 +1372,7 @@
     const M = new Matrix(size, size);
     buildMicroFunctionPatterns(M);
     const mp = MICRO_MASK_MAP[mask];
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        if (!M.isFunc(x, y)) {
-          M.dark[y * size + x] = modules[y][x] ^ (maskPredicate(mp, y, x) ? 1 : 0);
-        }
-      }
-    }
+    unmaskInto(M, modules, (y, x) => maskPredicate(mp, y, x));
     const bits = readPlacedBits(M, false, size - 1);
     const [capacityBits, dataCw, eccCw] = MICRO_DATA[ecIdx][version - 1];
     const cw = new Uint8Array(dataCw + eccCw);
@@ -1431,31 +1419,12 @@
 
     const M = new Matrix(w, h);
     buildRMQRFunctionPatterns(M, vi);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (!M.isFunc(x, y)) {
-          M.dark[y * w + x] = modules[y][x] ^ (maskPredicate(4, y, x) ? 1 : 0);
-        }
-      }
-    }
+    unmaskInto(M, modules, (y, x) => maskPredicate(4, y, x));
     const bits = readPlacedBits(M, false, w - 2);
     const totalCw = RMQR_TOTAL_CW[vi];
-    const allCw = new Uint8Array(totalCw);
-    for (let i = 0; i < totalCw * 8; i++) allCw[i >> 3] |= bits[i] << (7 - (i & 7));
+    const allCw = bitsToBytes(bits.slice(0, totalCw * 8));
     const dataCw = RMQR_DATA_CW[bestEc][vi];
-    const { blocks, lens, eccPerBlock } = deinterleave(allCw, totalCw, dataCw, RMQR_BLOCKS[bestEc][vi]);
-    let corrected = 0;
-    for (const block of blocks) {
-      const nErr = rsCorrect(block, eccPerBlock);
-      if (nErr < 0) throw new QRDecodeError("誤り訂正能力を超えています (読み取り不能)");
-      corrected += nErr;
-    }
-    const dataBits = [];
-    for (let b = 0; b < blocks.length; b++) {
-      for (let i = 0; i < lens[b]; i++) {
-        for (let j = 7; j >= 0; j--) dataBits.push((blocks[b][i] >> j) & 1);
-      }
-    }
+    const { dataBits, corrected } = correctInterleavedBlocks(allCw, totalCw, dataCw, RMQR_BLOCKS[bestEc][vi]);
     const { text } = parseBitStream(dataBits, "rmqr", vi + 1);
     return {
       text, corrected, ecLevel: bestEc === 0 ? "M" : "H", mask: null,
