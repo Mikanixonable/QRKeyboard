@@ -1913,7 +1913,7 @@
   }
 
   /* ZXing が報告するバーコード形式 → このアプリの規格・シンボロジーへの対応
-     (マイクロQR・rMQRは ZXing 非対応のため読み取れない) */
+     (MicroQR・rMQRは ZXing 非対応のため読み取れない) */
   function mapZXingFormat(format) {
     if (!zxingAvailable) return null;
     const F = ZXing.BarcodeFormat;
@@ -1927,7 +1927,7 @@
     return null;
   }
 
-  /* ---------- マイクロQR・rMQR 用の自前検出 (ZXing が非対応のため) ----------
+  /* ---------- MicroQR・rMQR 用の自前検出 (ZXing が非対応のため) ----------
      位置検出パターン (1:1:3:1:1 濃淡比) を画像から探し、そこを基準に
      取りうる型番/寸法を総当たりでグリッドサンプリングして QRLib.decode に
      渡す。回転・傾きへの補正は行わないため、正面から近い角度で撮影/取り込み
@@ -2047,7 +2047,7 @@
     return { grid, box: { x0: leftPx, y0: topPx, w: cols * cand.moduleSize, h: rows * cand.moduleSize } };
   }
 
-  /* マイクロQR (4 型番) と rMQR (32 型番) を、検出した位置検出パターンを起点に総当たりで試す */
+  /* MicroQR (4 型番) と rMQR (32 型番) を、検出した位置検出パターンを起点に総当たりで試す */
   function tryDecodeMicroRmqr(offCanvas) {
     if (!zxingAvailable) return null;
     const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(offCanvas);
@@ -2103,7 +2103,7 @@
       state.rmqr.width = Number(m[2]);
       state.rmqr.ec = decoded.ecLevel;
     }
-    setScanStatus(`読み取り成功 (${std === "micro" ? "マイクロQR" : "rMQR"})`);
+    setScanStatus(`読み取り成功 (${std === "micro" ? "MicroQR" : "rMQR"})`);
     selectStandard(std);
   }
 
@@ -2293,7 +2293,7 @@
           handleScanResult(result, decodedCanvas);
           return;
         } catch (e) {
-          // このフレームでは見つからなかった。マイクロQR/rMQR用の自前検出も
+          // このフレームでは見つからなかった。MicroQR/rMQR用の自前検出も
           // 毎フレームだと重いため、数フレームに一度だけ試す
           frameCount++;
           if (frameCount % 3 === 0) {

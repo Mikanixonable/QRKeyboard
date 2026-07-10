@@ -1,8 +1,8 @@
 /*
- * qrcode.js — QRコード / マイクロQRコード / rMQRコード エンコーダ(依存なし)
+ * qrcode.js — QRコード / MicroQRコード / rMQRコード エンコーダ(依存なし)
  *
  * 準拠規格:
- *   - QRコード / マイクロQRコード: ISO/IEC 18004
+ *   - QRコード / MicroQRコード: ISO/IEC 18004
  *   - rMQRコード:                 ISO/IEC 23941:2022
  *
  * 数値テーブル(容量・RSブロック・フォーマット情報ビット列・配置座標)は
@@ -220,7 +220,7 @@
     0x27541, 0x28c69,
   ];
 
-  /* Annex C: マイクロQR用フォーマット情報ビット列
+  /* Annex C: MicroQR用フォーマット情報ビット列
    * index = (シンボル番号 << 2) | マスク番号 */
   const MICRO_FORMAT_SEQ = [
     0x4445, 0x4172, 0x4e2b, 0x4b1c, 0x55ae, 0x5099, 0x5fc0, 0x5af7,
@@ -229,7 +229,7 @@
     0x2508, 0x203f, 0x2f66, 0x2a51, 0x34e3, 0x31d4, 0x3e8d, 0x3bba,
   ];
 
-  /* マイクロQR: [ecIdx L/M/Q][version-1] = [データビット数, データCW数, 誤り訂正CW数] */
+  /* MicroQR: [ecIdx L/M/Q][version-1] = [データビット数, データCW数, 誤り訂正CW数] */
   const MICRO_DATA = [
     [[20, 3, 2], [40, 5, 5], [84, 11, 6], [128, 16, 8]],   // L (M1 は誤り検出のみ)
     [[0, 0, 0], [32, 4, 6], [68, 9, 8], [112, 14, 10]],     // M
@@ -243,7 +243,7 @@
     byte: [0, 0, 4, 5],
   };
   const MICRO_MODE_VALUE = { numeric: 0, alphanumeric: 1, byte: 2 };
-  /* マイクロQRのマスク 0-3 は QR のマスク 1,4,6,7 と同じ式 */
+  /* MicroQRのマスク 0-3 は QR のマスク 1,4,6,7 と同じ式 */
   const MICRO_MASK_MAP = [1, 4, 6, 7];
 
   /* ========================================================================
@@ -718,7 +718,7 @@
   }
 
   /* ========================================================================
-   * マイクロQRコード
+   * MicroQRコード
    * ====================================================================== */
   const MICRO_EC_IDX = { L: 0, M: 1, Q: 2 };
 
@@ -756,7 +756,7 @@
     for (let i = 1; i <= 7; i++) M.set(8, i, (seq >> (i - 1)) & 1, true);
   }
 
-  /* マイクロQRのマスク評価 (ISO/IEC 18004 §7.8.3.2) — 大きいほど良い */
+  /* MicroQRのマスク評価 (ISO/IEC 18004 §7.8.3.2) — 大きいほど良い */
   function microScore(M) {
     const size = M.width;
     let sum1 = 0, sum2 = 0;
@@ -802,7 +802,7 @@
         if (fits(v)) { version = v; break; }
       }
       if (!version) {
-        throw new QREncodeError("TOO_LONG", "データがマイクロQR (" + ecLevel + ") の最大容量を超えています");
+        throw new QREncodeError("TOO_LONG", "データがMicroQR (" + ecLevel + ") の最大容量を超えています");
       }
     }
 
@@ -1204,7 +1204,7 @@
     return v;
   }
 
-  /* データビット列 → テキスト (QR/マイクロQR/rMQR 共通) */
+  /* データビット列 → テキスト (QR/MicroQR/rMQR 共通) */
   function parseBitStream(bits, standard, version) {
     let pos = 0;
     let out = "";

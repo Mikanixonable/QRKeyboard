@@ -7,7 +7,7 @@
 | タブ | 規格 | 実装ファイル |
 |---|---|---|
 | QR | QR コード (ISO/IEC 18004) | qrcode.js |
-| マイクロQR | Micro QR (M1〜M4) | qrcode.js |
+| MicroQR | Micro QR (M1〜M4) | qrcode.js |
 | rMQR | rectangular Micro QR | qrcode.js |
 | DataMatrix | ECC 200 (ISO/IEC 16022) | datamatrix.js |
 | Aztec | ISO/IEC 24778 | aztec.js |
