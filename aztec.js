@@ -447,7 +447,176 @@
     };
   }
 
-  const AZLib = { encode, AZEncodeError, FULL_SIZES, COMPACT_SIZES };
+  /* ===== Aztec Rune (ISO/IEC 24778 Annex A) =====
+   * 0〜255 の整数値のみを符号化する簡易版。コンパクト Aztec のファインダー
+   * 中心 11×11 (固定リングパターン + モードメッセージ位置28ビット分) を
+   * そのまま流用し、モードメッセージと同じ GF(16) RS 符号 (次数5) で
+   * 8ビット値を2ニブルとして保護する。 */
+  const RUNE_MAP = [
+    [1, 1, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [2027, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2007],
+    [2026, 1, 0, 1, 1, 1, 1, 1, 0, 1, 2008],
+    [2025, 1, 0, 1, 0, 0, 0, 1, 0, 1, 2009],
+    [2024, 1, 0, 1, 0, 1, 0, 1, 0, 1, 2010],
+    [2023, 1, 0, 1, 0, 0, 0, 1, 0, 1, 2011],
+    [2022, 1, 0, 1, 1, 1, 1, 1, 0, 1, 2012],
+    [2021, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2013],
+    [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [0, 0, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 0, 0],
+  ];
+
+  function encodeRune(value) {
+    if (!Number.isInteger(value) || value < 0 || value > 255) {
+      throw new AZEncodeError("BAD_OPTION", "Aztec Rune は 0〜255 の整数で入力してください");
+    }
+    const desc = [];
+    for (let i = 3; i >= 0; i--) desc.push((value >> (i + 4)) & 1);
+    for (let i = 3; i >= 0; i--) desc.push((value >> i) & 1);
+    const descWords = [
+      (desc[0] << 3) | (desc[1] << 2) | (desc[2] << 1) | desc[3],
+      (desc[4] << 3) | (desc[5] << 2) | (desc[6] << 1) | desc[7],
+    ];
+    const descEcc = rsRemainder(GF16, descWords, 5);
+    for (const v of descEcc) for (let i = 3; i >= 0; i--) desc.push((v >> i) & 1);
+    const descAt = (idx) => (idx < desc.length ? desc[idx] : 0);
+
+    const dim = 11;
+    const modules = [];
+    for (let y = 0; y < dim; y++) {
+      const row = new Array(dim).fill(0);
+      for (let x = 0; x < dim; x++) {
+        const v = RUNE_MAP[y][x];
+        if (v === 1) row[x] = 1;
+        else if (v >= 2000) row[x] = descAt(v - 2000);
+      }
+      modules.push(row);
+    }
+    return {
+      standard: "aztecrune",
+      versionName: "Aztec Rune",
+      value,
+      modules,
+      width: dim,
+      height: dim,
+      quietZone: 2,
+    };
+  }
+
+  /* 汎用 GF(2^m) RS 復号 (Berlekamp-Massey + Chien 探索 + Forney 法)。
+   * qrcode.js の rsCorrect と同一アルゴリズムを、フィールドサイズ (gf.size)
+   * をパラメータ化して汎用化したもの。ただし本ファイルの rsRemainder / generatorPoly
+   * は根を α^1..α^degree で構成する (root base b0=1、qrcode.js の α^0..α^(degree-1)
+   * とは1つずれる) ため、シンドローム指数を i+1 にずらし、Forney 振幅式も
+   * b0=1 用 (X^0 = 1、X^(1-b0) 項なし) に合わせてある。 */
+  function gfRsCorrect(gf, cw, eccLen) {
+    const n = cw.length;
+    const synd = new Array(eccLen).fill(0);
+    let hasError = false;
+    for (let i = 0; i < eccLen; i++) {
+      let s = 0;
+      for (let j = 0; j < n; j++) s = cw[j] ^ (s === 0 ? 0 : gf.exp[(gf.log[s] + i + 1) % gf.size]);
+      synd[i] = s;
+      if (s !== 0) hasError = true;
+    }
+    if (!hasError) return 0;
+
+    let sigma = [1], prev = [1], L = 0, m = 1, b = 1;
+    for (let i = 0; i < eccLen; i++) {
+      let delta = synd[i];
+      for (let j = 1; j <= L; j++) {
+        if (sigma[j] !== 0 && synd[i - j] !== 0) delta ^= gf.exp[(gf.log[sigma[j]] + gf.log[synd[i - j]]) % gf.size];
+      }
+      if (delta === 0) {
+        m++;
+      } else if (2 * L <= i) {
+        const tmp = sigma.slice();
+        const coef = gf.exp[(gf.log[delta] - gf.log[b] + gf.size) % gf.size];
+        const shifted = new Array(prev.length + m).fill(0);
+        for (let j = 0; j < prev.length; j++) {
+          if (prev[j] !== 0) shifted[j + m] = gf.exp[(gf.log[prev[j]] + gf.log[coef]) % gf.size];
+        }
+        while (sigma.length < shifted.length) sigma.push(0);
+        for (let j = 0; j < shifted.length; j++) sigma[j] ^= shifted[j];
+        L = i + 1 - L; prev = tmp; b = delta; m = 1;
+      } else {
+        const coef = gf.exp[(gf.log[delta] - gf.log[b] + gf.size) % gf.size];
+        const shifted = new Array(prev.length + m).fill(0);
+        for (let j = 0; j < prev.length; j++) {
+          if (prev[j] !== 0) shifted[j + m] = gf.exp[(gf.log[prev[j]] + gf.log[coef]) % gf.size];
+        }
+        while (sigma.length < shifted.length) sigma.push(0);
+        for (let j = 0; j < shifted.length; j++) sigma[j] ^= shifted[j];
+        m++;
+      }
+    }
+    while (sigma.length > 1 && sigma[sigma.length - 1] === 0) sigma.pop();
+    const numErrors = sigma.length - 1;
+    if (numErrors === 0 || numErrors > Math.floor(eccLen / 2)) return -1;
+
+    const errPos = [];
+    for (let j = 0; j < n; j++) {
+      const xinvLog = (gf.size - ((n - 1 - j) % gf.size)) % gf.size;
+      let v = 0;
+      for (let k = 0; k < sigma.length; k++) {
+        if (sigma[k] !== 0) v ^= gf.exp[(gf.log[sigma[k]] + k * xinvLog) % gf.size];
+      }
+      if (v === 0) errPos.push(j);
+    }
+    if (errPos.length !== numErrors) return -1;
+
+    const omega = new Array(eccLen).fill(0);
+    for (let i = 0; i < eccLen; i++) {
+      for (let k = 0; k <= Math.min(i, sigma.length - 1); k++) {
+        if (sigma[k] !== 0 && synd[i - k] !== 0) omega[i] ^= gf.exp[(gf.log[sigma[k]] + gf.log[synd[i - k]]) % gf.size];
+      }
+    }
+    for (const j of errPos) {
+      const xLog = (n - 1 - j) % gf.size;
+      const xinvLog = (gf.size - xLog) % gf.size;
+      let om = 0;
+      for (let k = 0; k < eccLen; k++) {
+        if (omega[k] !== 0) om ^= gf.exp[(gf.log[omega[k]] + k * xinvLog) % gf.size];
+      }
+      let sp = 0;
+      for (let k = 1; k < sigma.length; k += 2) {
+        if (sigma[k] !== 0) sp ^= gf.exp[(gf.log[sigma[k]] + (k - 1) * xinvLog) % gf.size];
+      }
+      if (sp === 0) return -1;
+      if (om !== 0) {
+        const mag = gf.exp[(gf.log[om] - gf.log[sp] + gf.size) % gf.size];
+        cw[j] ^= mag;
+      }
+    }
+    for (let i = 0; i < eccLen; i++) {
+      let s = 0;
+      for (let j = 0; j < n; j++) s = cw[j] ^ (s === 0 ? 0 : gf.exp[(gf.log[s] + i + 1) % gf.size]);
+      if (s !== 0) return -1;
+    }
+    return numErrors;
+  }
+
+  function decodeRune(modules) {
+    if (modules.length !== 11 || modules[0].length !== 11) {
+      throw new AZEncodeError("BAD_OPTION", "サイズが不正です (Aztec Rune は 11×11)");
+    }
+    const desc = [];
+    for (let y = 0; y < 11; y++) {
+      for (let x = 0; x < 11; x++) {
+        const v = RUNE_MAP[y][x];
+        if (v >= 2000) desc[v - 2000] = modules[y][x];
+      }
+    }
+    const words = [];
+    for (let i = 0; i < 7; i++) {
+      words.push((desc[i * 4] << 3) | (desc[i * 4 + 1] << 2) | (desc[i * 4 + 2] << 1) | desc[i * 4 + 3]);
+    }
+    const corrected = gfRsCorrect(GF16, words, 5);
+    if (corrected < 0) throw new AZEncodeError("BAD_OPTION", "誤り訂正能力を超えています (読み取り不能)");
+    return { value: (words[0] << 4) | words[1], corrected };
+  }
+
+  const AZLib = { encode, encodeRune, decodeRune, AZEncodeError, FULL_SIZES, COMPACT_SIZES };
   if (typeof module !== "undefined" && module.exports) module.exports = AZLib;
   else global.AZLib = AZLib;
 })(typeof globalThis !== "undefined" ? globalThis : this);

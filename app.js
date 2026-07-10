@@ -54,6 +54,8 @@
     datamatrix: { sizeAuto: true, size: 4 },
     aztec: { ec: 1, versionAuto: true, version: 6 },
     barcode: { symbology: "code128", showText: true },
+    aztecrune: { value: 42 },
+    pdf417: { ecAuto: true, ec: 2, colsAuto: true, cols: 8 },
   };
 
   /* ---------- 共通部品 ---------- */
@@ -98,11 +100,28 @@
     const box = $("ec-control");
     box.textContent = "";
     const std = state.standard;
+    if (std === "aztecrune") { $("ec-field").hidden = true; return; }
     const st = state[std];
     $("ec-field").hidden = std === "barcode";
 
     if (std === "datamatrix") {
       box.appendChild(makeNote("ECC 200 (リード・ソロモン符号) — 規格で固定です"));
+      return;
+    }
+    if (std === "pdf417") {
+      box.appendChild(makeSegButton("自動", st.ecAuto, () => {
+        st.ecAuto = true;
+        rebuildControls();
+        render();
+      }));
+      for (let level = 0; level <= 8; level++) {
+        box.appendChild(makeSegButton(String(level), !st.ecAuto && st.ec === level, () => {
+          st.ecAuto = false;
+          st.ec = level;
+          rebuildControls();
+          render();
+        }));
+      }
       return;
     }
     if (std === "aztec") {
@@ -158,6 +177,9 @@
         case "aztec":
           AZLib.encode({ text, ecIndex: st.ec, version });
           return true;
+        case "pdf417":
+          PDF417Lib.encode({ text, eccLevel: st.ecAuto ? null : st.ec, cols: version });
+          return true;
       }
     } catch (e) {
       return false;
@@ -172,8 +194,10 @@
     const label = $("version-label");
     box.textContent = "";
     const std = state.standard;
+    $("version-field").hidden = std === "aztecrune";
+    if (std === "aztecrune") return;
     const st = state[std];
-    label.textContent = std === "barcode" ? "種類" : "型番(複雑度)";
+    label.textContent = std === "barcode" ? "種類" : std === "pdf417" ? "列数" : "型番(複雑度)";
 
     if (std === "barcode") {
       const seg = document.createElement("div");
@@ -291,6 +315,21 @@
         });
       }
       box.appendChild(makeTileGrid(items));
+      return;
+    } else if (std === "pdf417") {
+      const items = [{
+        label: "自動", checked: st.colsAuto, full: true,
+        onClick: () => { st.colsAuto = true; rebuildControls(); render(); },
+      }];
+      for (let cols = 1; cols <= 30; cols++) {
+        items.push({
+          label: String(cols),
+          checked: !st.colsAuto && st.cols === cols,
+          fits: versionFitsSingleCode("pdf417", cols),
+          onClick: () => { st.colsAuto = false; st.cols = cols; rebuildControls(); render(); },
+        });
+      }
+      box.appendChild(makeTileGrid(items, "minmax(28px, 1fr)"));
       return;
     }
   }
@@ -514,6 +553,14 @@
         return AZLib.encode({ text, ecIndex: st.ec, version: st.versionAuto ? 0 : st.version });
       case "barcode":
         return BARLib.encode({ symbology: st.symbology, text });
+      case "aztecrune":
+        return AZLib.encodeRune(Number(text.trim()));
+      case "pdf417":
+        return PDF417Lib.encode({
+          text,
+          eccLevel: st.ecAuto ? null : st.ec,
+          cols: st.colsAuto ? null : st.cols,
+        });
     }
   }
 
@@ -1086,6 +1133,13 @@
     } else if (std === "barcode") {
       items.push(["種類", r.versionName]);
       items.push(["幅", `${r.width} モジュール`]);
+    } else if (std === "aztecrune") {
+      items.push(["値", String(r.value)]);
+      items.push(["サイズ", `${sizeText} (固定)`]);
+    } else if (std === "pdf417") {
+      items.push(["構成", `${st.colsAuto ? "自動 → " : ""}${r.cols}列 × ${r.rows}行`]);
+      items.push(["誤り訂正レベル", `${st.ecAuto ? "自動 → " : ""}${r.eccLevel}`]);
+      items.push(["コード語", `データ ${r.dataCodewords} + 訂正 ${r.eccCodewords}`]);
     }
     let contentDd = null;
     items.forEach(([dt, dd], i) => {
@@ -1204,7 +1258,7 @@
     history.replaceState(null, "", "?" + params.toString());
   }
 
-  const STANDARDS = ["qr", "micro", "rmqr", "datamatrix", "aztec", "barcode"];
+  const STANDARDS = ["qr", "micro", "rmqr", "datamatrix", "aztec", "barcode", "aztecrune", "pdf417"];
 
   /* 起動時に URL のクエリパラメーターから状態を復元する。復元した規格名 (なければ null) を返す */
   function loadFromUrl() {

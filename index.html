@@ -214,6 +214,84 @@
                 <rect x="10" y="10" width="1" height="1" />
               </svg>
             </button>
+            <button class="tab tab-rich" role="tab" data-standard="aztecrune" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect x="0" y="0" width="16" height="16" class="icon-gap" stroke="none" />
+                    <rect x="6" y="0" width="4" height="16" />
+                    <rect x="0" y="6" width="16" height="4" />
+                    <rect x="7" y="7" width="2" height="2" class="icon-gap" />
+                  </svg>
+                  <span>Aztec Rune</span>
+                </div>
+                <p class="tab-rich-desc">0〜255 の整数のみ・11×11 固定</p>
+              </div>
+              <svg class="tab-rich-icon" viewBox="0 0 21 21" aria-hidden="true">
+                <rect x="0" y="0" width="21" height="21" class="icon-gap" stroke="none" />
+                <rect x="9" y="0" width="3" height="21" />
+                <rect x="0" y="9" width="21" height="3" />
+                <rect x="6" y="6" width="9" height="9" class="icon-gap" />
+                <rect x="9" y="9" width="3" height="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="tab-category" data-category="stacked">
+          <div class="tab-category-label">複線式バーコード</div>
+          <div class="tab-group tab-group-barcode" aria-label="複線式バーコード系">
+            <button class="tab tab-rich" role="tab" data-standard="pdf417" aria-selected="false">
+              <div class="tab-rich-main">
+                <div class="tab-rich-title">
+                  <svg class="tab-rich-badge" viewBox="0 0 16 16">
+                    <rect x="1" y="2" width="1" height="3" />
+                    <rect x="3" y="2" width="2" height="3" />
+                    <rect x="6" y="2" width="1" height="3" />
+                    <rect x="9" y="2" width="2" height="3" />
+                    <rect x="12" y="2" width="1" height="3" />
+                    <rect x="1" y="7" width="2" height="3" />
+                    <rect x="4" y="7" width="1" height="3" />
+                    <rect x="6" y="7" width="2" height="3" />
+                    <rect x="9" y="7" width="1" height="3" />
+                    <rect x="11" y="7" width="2" height="3" />
+                    <rect x="1" y="12" width="1" height="2" />
+                    <rect x="3" y="12" width="2" height="2" />
+                    <rect x="7" y="12" width="1" height="2" />
+                    <rect x="9" y="12" width="2" height="2" />
+                    <rect x="12" y="12" width="1" height="2" />
+                  </svg>
+                  <span>PDF417</span>
+                </div>
+                <p class="tab-rich-desc">バイト圧縮のみ・行×列自動・誤り訂正自動</p>
+              </div>
+              <svg class="tab-rich-icon tab-rich-icon-wide" viewBox="0 0 32 13" aria-hidden="true">
+                <rect x="0" y="0" width="2" height="3" />
+                <rect x="4" y="0" width="3" height="3" />
+                <rect x="9" y="0" width="1" height="3" />
+                <rect x="12" y="0" width="2" height="3" />
+                <rect x="16" y="0" width="3" height="3" />
+                <rect x="21" y="0" width="1" height="3" />
+                <rect x="24" y="0" width="2" height="3" />
+                <rect x="28" y="0" width="3" height="3" />
+                <rect x="1" y="5" width="3" height="3" />
+                <rect x="6" y="5" width="1" height="3" />
+                <rect x="9" y="5" width="2" height="3" />
+                <rect x="13" y="5" width="3" height="3" />
+                <rect x="18" y="5" width="1" height="3" />
+                <rect x="21" y="5" width="2" height="3" />
+                <rect x="25" y="5" width="3" height="3" />
+                <rect x="30" y="5" width="1" height="3" />
+                <rect x="0" y="10" width="1" height="3" />
+                <rect x="3" y="10" width="3" height="3" />
+                <rect x="8" y="10" width="2" height="3" />
+                <rect x="12" y="10" width="1" height="3" />
+                <rect x="15" y="10" width="3" height="3" />
+                <rect x="20" y="10" width="2" height="3" />
+                <rect x="24" y="10" width="1" height="3" />
+                <rect x="27" y="10" width="3" height="3" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -385,6 +463,7 @@
   <script src="datamatrix.js"></script>
   <script src="aztec.js"></script>
   <script src="barcode1d.js"></script>
+  <script src="pdf417.js"></script>
   <script src="decode-finder.js"></script>
   <script src="app.js"></script>
 </body>

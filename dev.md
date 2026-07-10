@@ -154,6 +154,9 @@
 
 Aztec Rune, CODABLOCK F, PDF417, UPC-A/UPC-E, Code 93, Codabar, ITF/ITF-14, Industrial・Matrix 2 of 5, MSI, Plessey, Pharmacode, Code 11
 
+- Aztec Runeの実行検証、UI追加
+- PDF417の実装続き
+
 - PWA対応して
 - 2つ必要な条件、3つ必要な条件も色分けしたい
 色分けの説明が欲しい
