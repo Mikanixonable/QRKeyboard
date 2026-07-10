@@ -3,34 +3,47 @@
  * 1画面完結・スクロールなし (PC / モバイル対応)
  * ========================================================== */
 :root {
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --text: #1a1c1f;
-  --text-sub: #5f6672;
-  --border: #d9dde3;
-  --accent: #1a56c4;        /* QR 系 */
-  --accent-weak: #e3ecfb;
-  --accent2: #0e7a5f;       /* 二次元コード (QR 以外) */
-  --accent2-weak: #dcf2ec;
-  --accent3: #a9660b;       /* 一次元コード */
-  --accent3-weak: #f6ead2;
-  --danger: #b3261e;
-  --radius: 10px;
+  /* ニューモーフィズム: メイン=灰色、サブ=白、アクセント=オレンジ。
+     カード類は背景と同色にし、二方向シャドウ (--shadow-light/--shadow-dark)
+     の陰影だけで凹凸を表現する (--neu-* 参照)。 */
+  --bg: #e7eaee;
+  --surface: #e7eaee;
+  --surface-white: #ffffff;  /* サブカラー: 押し込み面 (入力欄・凹面) の下地 */
+  --text: #33373d;
+  --text-sub: #767d87;
+  --border: #d4d9df;
+  --accent: #ef8033;         /* QR 系 */
+  --accent-weak: #fce3cd;
+  --accent2: #d9731f;        /* 二次元コード (QR 以外) */
+  --accent2-weak: #f6dcc0;
+  --accent3: #b85c1a;        /* 一次元コード */
+  --accent3-weak: #f0d5b8;
+  --danger: #c0392b;
+  --radius: 14px;
+  --shadow-dark: #b7bdc6;
+  --shadow-light: #ffffff;
+  --neu-raised: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+  --neu-raised-sm: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  --neu-inset: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+  --neu-inset-sm: inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17191d;
-    --surface: #212429;
-    --text: #e8eaee;
-    --text-sub: #9aa2ad;
-    --border: #3a3f47;
-    --accent: #6ea1f0;
-    --accent-weak: #263650;
-    --accent2: #4fc3a1;
-    --accent2-weak: #1d3a32;
-    --accent3: #e0ab5c;
-    --accent3-weak: #3a2f1d;
-    --danger: #f2827b;
+    --bg: #2b2e33;
+    --surface: #2b2e33;
+    --surface-white: #383c43;
+    --text: #eceef0;
+    --text-sub: #9aa0a8;
+    --border: #40454c;
+    --accent: #f2954f;
+    --accent-weak: #47331f;
+    --accent2: #e08a3c;
+    --accent2-weak: #3c2b18;
+    --accent3: #d9731f;
+    --accent3-weak: #362413;
+    --danger: #e57368;
+    --shadow-dark: #1d1f22;
+    --shadow-light: #383c43;
   }
 }
 
@@ -104,9 +117,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: none;
+  border-radius: 10px;
   background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
   color: var(--text);
   font: inherit;
   padding: 5px 6px;
@@ -145,10 +159,10 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
   padding: 6px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--neu-raised), 0 10px 28px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -160,8 +174,9 @@ body {
 #standard-combo .quick-combo-panel { left: 0; width: 200%; }
 #decode-combo .quick-combo-panel { right: 0; width: 200%; }
 .quick-combo-option {
-  border: 1px solid var(--border);
+  border: none;
   background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
   color: var(--text);
   font: inherit;
   font-size: 12.5px;
@@ -170,7 +185,7 @@ body {
   border-radius: 8px;
   cursor: pointer;
 }
-.quick-combo-option:hover { border-color: var(--accent); color: var(--accent); }
+.quick-combo-option:hover { color: var(--accent); }
 .quick-combo-note {
   font-size: 10px;
   color: var(--text-sub);
@@ -199,7 +214,8 @@ body {
   flex-direction: column;
   gap: 3px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--neu-inset-sm);
   border-radius: var(--radius);
   padding: 3px;
 }
@@ -217,14 +233,14 @@ body {
   text-align: left;
 }
 .tab:hover:not([aria-selected="true"]) { color: var(--text); }
-.tab-group-qr { border-color: var(--accent); --tab-accent: var(--accent); }
-.tab-group-qr .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
+.tab-group-qr { --tab-accent: var(--accent); }
+.tab-group-qr .tab[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: var(--neu-raised-sm); }
 /* 二次元コード (QR 以外) は色を変えて分離 */
-.tab-group-other { border-color: var(--accent2); --tab-accent: var(--accent2); }
-.tab-group-other .tab[aria-selected="true"] { background: var(--accent2); color: #fff; }
+.tab-group-other { --tab-accent: var(--accent2); }
+.tab-group-other .tab[aria-selected="true"] { background: var(--accent2); color: #fff; box-shadow: var(--neu-raised-sm); }
 /* 一次元コードはさらに別の色で分離 */
-.tab-group-barcode { border-color: var(--accent3); --tab-accent: var(--accent3); }
-.tab-group-barcode .tab[aria-selected="true"] { background: var(--accent3); color: #fff; }
+.tab-group-barcode { --tab-accent: var(--accent3); }
+.tab-group-barcode .tab[aria-selected="true"] { background: var(--accent3); color: #fff; box-shadow: var(--neu-raised-sm); }
 
 /* QR系タブ: サブスクプラン風のリッチなカードボタン */
 .tab-rich {
@@ -350,9 +366,10 @@ body {
 textarea {
   width: 100%;
   resize: none;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
+  border: none;
+  border-radius: 10px;
+  background: var(--surface-white);
+  box-shadow: var(--neu-inset-sm);
   color: var(--text);
   font: inherit;
   padding: 7px 10px;
@@ -391,8 +408,9 @@ textarea:focus, select:focus, input:focus-visible,
   width: 100%;
 }
 .seg-btn {
-  border: 1px solid var(--border);
+  border: none;
   background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
   color: var(--text);
   font: inherit;
   font-size: 12.5px;
@@ -404,13 +422,12 @@ textarea:focus, select:focus, input:focus-visible,
 }
 .seg-btn[aria-checked="true"] {
   background: var(--accent-weak);
-  border-color: var(--accent);
+  box-shadow: var(--neu-inset-sm);
   color: var(--accent);
   font-weight: 700;
 }
 .other-standard .seg-btn[aria-checked="true"] {
   background: var(--accent2-weak);
-  border-color: var(--accent2);
   color: var(--accent2);
 }
 .seg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -461,15 +478,17 @@ textarea:focus, select:focus, input:focus-visible,
   width: 30px;
   height: 22px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 5px;
+  box-shadow: var(--neu-raised-sm);
   background: none;
   cursor: pointer;
 }
 
 .small-button {
-  border: 1px solid var(--border);
+  border: none;
   background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
   color: var(--text);
   font: inherit;
   font-size: 11.5px;
@@ -478,7 +497,8 @@ textarea:focus, select:focus, input:focus-visible,
   cursor: pointer;
   white-space: nowrap;
 }
-.small-button:hover { border-color: var(--accent); color: var(--accent); }
+.small-button:hover { color: var(--accent); }
+.small-button:active { box-shadow: var(--neu-inset-sm); }
 
 /* ---------- プレビュー ---------- */
 .save-menu {
@@ -495,7 +515,9 @@ textarea:focus, select:focus, input:focus-visible,
   align-items: center;
   justify-content: center;
   position: relative;
-  border: 1px solid var(--border);
+  border: none;
+  background: var(--surface);
+  box-shadow: var(--neu-inset);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -559,7 +581,8 @@ textarea:focus, select:focus, input:focus-visible,
   align-content: flex-start;
   gap: 2px 16px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--neu-inset-sm);
   border-radius: var(--radius);
   padding: 5px 14px;
   font-size: 12px;
@@ -592,8 +615,9 @@ textarea:focus, select:focus, input:focus-visible,
 }
 .tile-grid .tile-full { grid-column: 1 / -1; }
 .tile {
-  border: 1px solid var(--border);
+  border: none;
   background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
   color: var(--text);
   font: inherit;
   font-size: 9px;
@@ -606,15 +630,14 @@ textarea:focus, select:focus, input:focus-visible,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tile:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.tile:hover:not(:disabled) { color: var(--accent); }
 .tile-fits {
-  border-color: var(--accent2);
   color: var(--accent2);
 }
-.tile-fits:hover:not(:disabled) { border-color: var(--accent2); color: var(--accent2); }
+.tile-fits:hover:not(:disabled) { color: var(--accent2); }
 .tile[aria-checked="true"] {
   background: var(--accent-weak);
-  border-color: var(--accent);
+  box-shadow: var(--neu-inset-sm);
   color: var(--accent);
   font-weight: 700;
 }
