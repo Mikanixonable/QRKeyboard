@@ -44,7 +44,7 @@
     outerBg: "#e5e7eb",
     outerSame: false,
     splitMode: "simple", // "simple" | "structured" (QR の Structured Append)
-    showContent: true,
+    showContent: false,
     contentPlacement: "combined", // "each" | "combined" | "both" (複数コード表示時のみ有効)
     saveScope: "code", // "code" (クワイエットゾーンまで) | "full" (背景・内容表示を含む)
     qr: { ec: "M", versionAuto: true, version: 5, maskAuto: true, mask: 0 },
@@ -464,12 +464,10 @@
     const box = $("save-scope-control");
     field.hidden = false;
     box.textContent = "";
-    [["コードのみ", "code"], ["背景を含む", "full"]].forEach(([label, v]) => {
-      box.appendChild(makeSegButton(label, state.saveScope === v, () => {
-        state.saveScope = v;
-        rebuildControls();
-      }));
-    });
+    box.appendChild(makeToggle(state.saveScope === "full", (checked) => {
+      state.saveScope = checked ? "full" : "code";
+      rebuildControls();
+    }, "背景を含めて保存"));
   }
 
   function rebuildControls() {
@@ -582,6 +580,20 @@
      一致させる (でないと画面表示だけ余白が薄い/濃いといったズレが生じる)。 */
   const MARGIN_RATIO = 0.12;
 
+  /* 内容表示 (文字入れ) のフォントサイズは、デスクトップを想定した絶対px指定
+     だと、表示域が小さいモバイルではコードに対して不釣り合いに大きく見えて
+     しまう。表示域の一辺 (squareSize) がこの基準値以上ならデスクトップと同じ
+     絶対pxを使い、それより小さい場合は比例縮小して同じコード:文字の比率を保つ
+     (可読性のため floorPx を下限とする)。 */
+  const CAPTION_SIZE_REF = 420;
+  function scaledCaptionPx(basePx, minPx, squareSize, dpr, floorBasePx, floorMinPx) {
+    const ratio = Math.min(1, squareSize / CAPTION_SIZE_REF);
+    return {
+      base: Math.round(Math.max(floorBasePx, basePx * ratio) * dpr),
+      min: Math.round(Math.max(floorMinPx, minPx * ratio) * dpr),
+    };
+  }
+
   /* 指定幅に収まるよう末尾を "…" で省略する */
   function truncateToWidth(context, text, maxWidth) {
     if (context.measureText(text).width <= maxWidth) return text;
@@ -679,13 +691,12 @@
       const showCaption = effectivePlacement() === "each";
       const totalW = r.quietLeft + r.width + r.quietRight;
       const outerColor = state.outerSame ? state.bg : state.outerBg;
-      const fontPxBase = Math.round(12 * dpr);
-      const fontPxMin = Math.round(8 * dpr);
 
       /* QR 系と同じ正方形の表示域に、余白 (MARGIN_RATIO) を確保した上で
          バーコードを中央揃えで配置する (規格によって配置ロジックが違うと
          見た目の余白比率がバラバラになるため、他規格と統一する)。 */
       const squareSize = Math.max(40, Math.min(availW, availH));
+      const { base: fontPxBase, min: fontPxMin } = scaledCaptionPx(12, 8, squareSize, dpr, 7, 5);
       const budget = Math.max(20, squareSize * (1 - MARGIN_RATIO * 2));
 
       const scale = Math.max(1, Math.floor(budget / totalW));
@@ -756,8 +767,6 @@
       const mw = r.width + qz * 2;
       const mh = r.height + qz * 2;
       const outerColor = state.outerSame ? state.bg : state.outerBg;
-      const fontPxBase = Math.round(12 * dpr);
-      const fontPxMin = Math.round(8 * dpr);
 
       /* キャンバス自体を QR 表示域 (.qr-card) と同じ正方形にする。以前はキャンバスを
          コード+キャプションぶんだけタイトなサイズにし、CSS の flex 中央寄せで正方形内に
@@ -769,6 +778,7 @@
          MARGIN_RATIO を使い、コード+キャプションが正方形の中央に一定の余白を
          残して収まるようにすることで、両者の見た目を一致させる。 */
       const squareSize = Math.max(40, Math.min(availW, availH));
+      const { base: fontPxBase, min: fontPxMin } = scaledCaptionPx(12, 8, squareSize, dpr, 7, 5);
       const budget = Math.max(20, squareSize * (1 - MARGIN_RATIO * 2));
 
       /* キャプション幅は最終的なコード幅 (mw*scale) に依存し、その幅は
@@ -854,8 +864,7 @@
     const budgetW = Math.max(20, squareSizeMulti * (1 - MARGIN_RATIO * 2));
     const budgetH = budgetW;
 
-    const cellFontPxBase = Math.round(10 * dpr);
-    const cellFontPxMin = Math.round(7 * dpr);
+    const { base: cellFontPxBase, min: cellFontPxMin } = scaledCaptionPx(10, 7, squareSizeMulti, dpr, 6, 5);
     const cellWEstimate = (budgetW - gap * (cols - 1)) / cols;
     /* 全コードのキャプションが2行に収まる、共通で使える最大フォントサイズを探す */
     let cellFontPx = cellFontPxBase;
@@ -878,8 +887,7 @@
     const maxCellLines = showCaptions ? Math.max(...cellLines.map((l) => l.length)) : 0;
     const captionH = showCaptions ? maxCellLines * cellLineH + Math.round(4 * dpr) : 0;
 
-    const combinedFontPxBase = Math.round(10 * dpr);
-    const combinedFontPxMin = Math.round(7 * dpr);
+    const { base: combinedFontPxBase, min: combinedFontPxMin } = scaledCaptionPx(10, 7, squareSizeMulti, dpr, 6, 5);
     const combinedRaw = combinedContentText();
     const combinedFit = showCombined
       ? fitCaptionLines(ctx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, budgetW - 8 * dpr, 2, combinedFontPxBase, combinedFontPxMin)
@@ -2315,6 +2323,8 @@
        失敗時のエラーメッセージ等が一切見えなくなっていた。常に見える
        mobile-top-bar の直下に付け替える */
     makeResponsiveMover(scanStatus, $("mobile-scan-status-slot")),
+    /* 保存範囲トグルは、モバイルでは縦幅節約のため「コピー」ボタンの右に移す */
+    makeResponsiveMover($("save-scope-field"), $("save-menu")),
   ];
   function applyResponsiveMovers() {
     responsiveMovers.forEach((move) => move());

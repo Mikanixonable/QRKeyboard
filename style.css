@@ -648,15 +648,15 @@ textarea:focus, select:focus, input:focus-visible,
     overflow-y: visible;
   }
   .left-menu-zone {
-    padding: 8px 12px;
+    padding: 8px 12px 4px;
     gap: 8px;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: none;
   }
   .right-menu-zone {
     border-left: none;
-    border-top: 1px solid var(--border);
-    padding: 8px 12px;
+    border-top: none;
+    padding: 4px 12px 8px;
     gap: 8px;
   }
   .site-title { font-size: 13px; flex: none; }
@@ -702,7 +702,7 @@ textarea:focus, select:focus, input:focus-visible,
   .center-content-zone.layout.preview {
     flex: none;
     flex-direction: column;
-    padding: 8px 12px;
+    padding: 4px 12px;
     gap: 8px;
   }
 
@@ -789,8 +789,9 @@ textarea:focus, select:focus, input:focus-visible,
 /* 縦幅の低いモバイル (iPhone SE 等) では QR 表示域と余白をさらに切り詰める */
 @media (max-width: 760px) and (max-height: 700px) {
   .content-middle { gap: 2px; --qr-frame-width: 190px; }
-  .center-content-zone.layout.preview { padding: 6px 12px; gap: 6px; }
-  .left-menu-zone, .right-menu-zone { padding: 6px 12px; gap: 6px; }
+  .center-content-zone.layout.preview { padding: 2px 12px; gap: 6px; }
+  .left-menu-zone { padding: 6px 12px 2px; gap: 6px; }
+  .right-menu-zone { padding: 2px 12px 6px; gap: 6px; }
 }
 
 /* 高さの低い横向きモバイルなど */

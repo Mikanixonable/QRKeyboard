@@ -181,5 +181,13 @@ PWA対応なし: manifest.jsonやService Workerがなく、オフラインでの
 - 画像を長押しで保存できるようにしたい
 スマホだと文字入れの文字が大きすぎる、相対的にできないか
 
-MicroQR・rMQRのデコードで、回転、歪みに対応して
-HanXin
+- MicroQR・rMQRのデコードで、斜め45度の読み取りができない
+
+
+以下のコードのエンコード、デコードの実装可能性を調査
+    - 二次元コード: Han Xin Code, JAB Code, Boxing barcode, DotCode
+    - 二次元(極座標系)コード: MaxiCode, ShotCode,
+    - 一次元コード: Automatic Car Identification, Code 11, Code 39, Code 93, Code 128, CodabarEuropean Article Number, GS1 DataBar, Industrial 2 of 5Interleaved 2 of 5, ITF-14, Matrix 2 of 5, MSI Barcode, Patch Code, Pharmacode, PlesseyTelepen, UPC
+
+- デコード時色が薄すぎる
+- コード下に文字を表示するか否かをurl変数に含める
