@@ -697,22 +697,37 @@
           scale = newScale;
         }
       }
-      canvas.width = mw * scale;
-      canvas.height = mh * scale + captionH;
+      /* キャンバス自体を QR 表示域 (.qr-card) と同じ正方形にする。以前はキャンバスを
+         コード+キャプションぶんだけタイトなサイズにし、CSS の flex 中央寄せで正方形内に
+         配置していたため、キャプション下の本当の余白量が JS から見えず、「クワイエット
+         ゾーン下端〜表示域下端の中間」を正しく計算できなかった。 */
+      const squareSize = Math.max(40, Math.min(availW, availH));
+      canvas.width = squareSize;
+      canvas.height = squareSize;
       canvas.style.width = `${canvas.width / dpr}px`;
       canvas.style.height = `${canvas.height / dpr}px`;
-      /* 背景色 (外側) を全体に敷き、その上にクワイエットゾーン込みのコード面だけ塗る。
-         内容表示はクワイエットゾーンの外 (背景色の上) に表示されるようにする。 */
+      /* 背景色 (外側) を正方形全体に敷き、その上にクワイエットゾーン込みのコード面を
+         中央揃えで塗る。内容表示はクワイエットゾーンの外 (背景色の上) に表示する。 */
       ctx.fillStyle = outerColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const contentW = mw * scale, contentH = mh * scale;
+      /* 正方形内で中央揃えする対象は「コード+キャプション」の全体ブロックであって、
+         コード単体ではない。コード単体で中央揃えしてしまうと、キャプション分の
+         高さがまるごと下側の余白に追加されるだけになり、上下の余白が非対称になって
+         「下の余白の中間に文字が来る」計算が狂う。 */
+      const blockH = contentH + captionH;
+      /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
+         エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
+      const originX = Math.max(0, Math.round((squareSize - contentW) / 2));
+      const originY = Math.max(0, Math.round((squareSize - blockH) / 2));
       ctx.fillStyle = state.bg;
-      ctx.fillRect(0, 0, mw * scale, mh * scale);
+      ctx.fillRect(originX, originY, contentW, contentH);
       ctx.fillStyle = state.fg;
       const modules = current.modulesList[0];
       for (let y = 0; y < r.height; y++) {
         const row = modules[y];
         for (let x = 0; x < r.width; x++) {
-          if (row[x]) ctx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
+          if (row[x]) ctx.fillRect(originX + (x + qz) * scale, originY + (y + qz) * scale, scale, scale);
         }
       }
       if (showCaption) {
@@ -721,13 +736,17 @@
         ctx.textBaseline = "top";
         const maxW = canvas.width - 8 * dpr;
         const lineH = Math.round(captionFontPx * 1.4);
-        /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
-        const startY = mh * scale + (captionH - lines.length * lineH) / 2;
+        const textBlockH = lines.length * lineH;
+        /* クワイエットゾーン下端から表示域 (正方形キャンバス) 下端までの帯の
+           縦中央に文字ブロックが来るようにする */
+        const qzBottom = originY + contentH;
+        const bandH = canvas.height - qzBottom;
+        const startY = qzBottom + (bandH - textBlockH) / 2;
         lines.forEach((line, i) => {
           ctx.fillText(line, canvas.width / 2, startY + i * lineH, maxW);
         });
       }
-      lastDraw = { scale, qz, dpr };
+      lastDraw = { scale, qz, dpr, originX, originY };
       return;
     }
 
@@ -798,8 +817,10 @@
       const col = i % cols, row = Math.floor(i / cols);
       const cellX = col * (cellW + gap);
       const cellY = row * (cellH + captionH + gap);
-      const offX = cellX + (cellW - mw * scale) / 2;
-      const offY = cellY + (cellH - mh * scale) / 2;
+      /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
+         エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
+      const offX = Math.round(cellX + (cellW - mw * scale) / 2);
+      const offY = Math.round(cellY + (cellH - mh * scale) / 2);
       const qz = r.quietZone;
       ctx.fillStyle = state.bg;
       ctx.fillRect(offX, offY, mw * scale, mh * scale);
@@ -817,7 +838,11 @@
         ctx.textBaseline = "top";
         const maxW = cellW - 4 * dpr;
         const blockH = cellLines[i].length * cellLineH;
-        const startY = cellY + cellH + (captionH - blockH) / 2;
+        /* このコードのクワイエットゾーン下端からセル (キャプション込み) 下端までの
+           帯の縦中央に文字ブロックが来るようにする */
+        const qzBottom = offY + mh * scale;
+        const bandH = cellY + cellH + captionH - qzBottom;
+        const startY = qzBottom + (bandH - blockH) / 2;
         cellLines[i].forEach((line, li) => {
           ctx.fillText(line, cellX + cellW / 2, startY + li * cellLineH, maxW);
         });
@@ -1102,9 +1127,9 @@
   canvas.addEventListener("click", (ev) => {
     if (!current || !lastDraw || current.results.length !== 1 || !QR_FAMILY.includes(state.standard)) return;
     const rect = canvas.getBoundingClientRect();
-    const { scale, qz, dpr } = lastDraw;
-    const x = Math.floor(((ev.clientX - rect.left) * dpr) / scale) - qz;
-    const y = Math.floor(((ev.clientY - rect.top) * dpr) / scale) - qz;
+    const { scale, qz, dpr, originX, originY } = lastDraw;
+    const x = Math.floor(((ev.clientX - rect.left) * dpr - originX) / scale) - qz;
+    const y = Math.floor(((ev.clientY - rect.top) * dpr - originY) / scale) - qz;
     const r = current.results[0];
     if (x < 0 || y < 0 || x >= r.width || y >= r.height) return;
     const modules = current.modulesList[0];
@@ -1235,13 +1260,20 @@
       captionH = lines.length * lineH + 12;
     }
     /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、コード (+内容表示) は
-       その中央に配置される。書き出しもそれをそのまま再現する。 */
+       その中央に配置される。書き出しもそれをそのまま再現する。
+       正方形にするために大きい方の辺に合わせるだけだと、既に元々ほぼ正方形の
+       コード (+わずかなキャプション) では上下 or 左右の余白がほぼ 0 になって
+       しまう (実際に発生していた不具合)。そこで常に一定の余白 (margin) を
+       四辺に確保した上で正方形化する。 */
     const contentW = mw * scale, contentH = mh * scale + captionH;
-    const square = Math.max(contentW, contentH);
+    const margin = Math.round(Math.max(contentW, contentH) * 0.12);
+    const square = Math.max(contentW, contentH) + margin * 2;
     off.width = square;
     off.height = square;
-    const originX = (square - contentW) / 2;
-    const originY = (square - contentH) / 2;
+    /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
+       エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
+    const originX = Math.round((square - contentW) / 2);
+    const originY = Math.round((square - contentH) / 2);
     octx.fillStyle = outerColor;
     octx.fillRect(0, 0, off.width, off.height);
     octx.fillStyle = state.bg;
@@ -1259,8 +1291,12 @@
       octx.textBaseline = "top";
       const lineH = Math.round(captionFontPx * 1.4);
       const maxW = contentW - 16;
-      /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
-      const startY = originY + mh * scale + (captionH - lines.length * lineH) / 2;
+      const blockH = lines.length * lineH;
+      /* クワイエットゾーン下端から表示域 (正方形) 下端までの帯の縦中央に
+         文字ブロックが来るようにする */
+      const qzBottom = originY + mh * scale;
+      const bandH = off.height - qzBottom;
+      const startY = qzBottom + (bandH - blockH) / 2;
       lines.forEach((line, i) => octx.fillText(line, originX + contentW / 2, startY + i * lineH, maxW));
     }
   }
@@ -1316,13 +1352,17 @@
     const gridH = rows * (cellH + captionH) + (rows - 1) * gap;
 
     /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、グリッド全体はその中央に
-       配置される。書き出しもそれをそのまま再現する。 */
+       配置される。書き出しもそれをそのまま再現する。常に一定の余白 (margin) を
+       四辺に確保した上で正方形化する (単一コードの場合と同じ理由)。 */
     const contentW = totalGridW, contentH = gridH + combinedH;
-    const square = Math.max(contentW, contentH);
+    const margin = Math.round(Math.max(contentW, contentH) * 0.12);
+    const square = Math.max(contentW, contentH) + margin * 2;
     off.width = square;
     off.height = square;
-    const originX = (square - contentW) / 2;
-    const originY = (square - contentH) / 2;
+    /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
+       エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
+    const originX = Math.round((square - contentW) / 2);
+    const originY = Math.round((square - contentH) / 2);
     octx.fillStyle = outerColor;
     octx.fillRect(0, 0, off.width, off.height);
     results.forEach((r, i) => {
@@ -1330,8 +1370,8 @@
       const col = i % cols, row = Math.floor(i / cols);
       const cellX = originX + col * (cellW + gap);
       const cellY = originY + row * (cellH + captionH + gap);
-      const offX = cellX + (cellW - dims[i].mw * scale) / 2;
-      const offY = cellY + (cellH - dims[i].mh * scale) / 2;
+      const offX = Math.round(cellX + (cellW - dims[i].mw * scale) / 2);
+      const offY = Math.round(cellY + (cellH - dims[i].mh * scale) / 2);
       octx.fillStyle = state.bg;
       octx.fillRect(offX, offY, dims[i].mw * scale, dims[i].mh * scale);
       octx.fillStyle = state.fg;
@@ -1347,7 +1387,11 @@
         octx.textBaseline = "top";
         const maxW = cellW - 4;
         const blockH = cellLines[i].length * cellLineH;
-        const startY = cellY + cellH + (captionH - blockH) / 2;
+        /* このコードのクワイエットゾーン下端からセル (キャプション込み) 下端までの
+           帯の縦中央に文字ブロックが来るようにする */
+        const qzBottom = offY + dims[i].mh * scale;
+        const bandH = cellY + cellH + captionH - qzBottom;
+        const startY = qzBottom + (bandH - blockH) / 2;
         cellLines[i].forEach((line, li) => {
           octx.fillText(line, cellX + cellW / 2, startY + li * cellLineH, maxW);
         });
@@ -1359,7 +1403,10 @@
       octx.textBaseline = "top";
       const maxW = contentW - 16;
       const blockH = combinedLines.length * combinedLineH;
-      const startY = originY + gridH + (combinedH - blockH) / 2;
+      /* グリッド下端から表示域 (正方形) 下端までの帯の縦中央に文字ブロックが来るようにする */
+      const gridBottom = originY + gridH;
+      const bandH = off.height - gridBottom;
+      const startY = gridBottom + (bandH - blockH) / 2;
       combinedLines.forEach((line, li) => {
         octx.fillText(line, originX + contentW / 2, startY + li * combinedLineH, maxW);
       });
@@ -1448,24 +1495,33 @@
       if (state.saveScope === "full") {
         const outerColor = state.outerSame ? state.bg : state.outerBg;
         const showCaption = effectivePlacement() === "each";
-        let captionH = 0, captionSvg = "";
+        let captionH = 0, captionLines = [], fontSize = 0, lineH = 0;
         if (showCaption) {
-          const fontSize = Math.max(3, Math.round(mw * 0.045));
-          const lines = wrapMonospace(perCodeContentText(0), fontSize, mw - fontSize, 3);
-          const lineH = fontSize * 1.4;
-          captionH = lines.length * lineH + fontSize * 0.6;
-          /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
-          const startTop = mh + (captionH - lines.length * lineH) / 2;
-          captionSvg = `<g font-family="monospace" font-size="${fontSize}" text-anchor="middle" fill="${state.fg}">` +
-            lines.map((line, i) => `<text x="${mw / 2}" y="${startTop + i * lineH + fontSize}">${escapeXml(line)}</text>`).join("") +
-            `</g>`;
+          fontSize = Math.max(3, Math.round(mw * 0.045));
+          captionLines = wrapMonospace(perCodeContentText(0), fontSize, mw - fontSize, 3);
+          lineH = fontSize * 1.4;
+          captionH = captionLines.length * lineH + fontSize * 0.6;
         }
         /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、コード (+内容表示) は
-           その中央に配置される。書き出しもそれをそのまま再現する。 */
+           その中央に配置される。書き出しもそれをそのまま再現する。常に一定の
+           余白 (margin) を四辺に確保した上で正方形化する。 */
         const contentH = mh + captionH;
-        const square = Math.max(mw, contentH);
+        const margin = Math.round(Math.max(mw, contentH) * 0.12);
+        const square = Math.max(mw, contentH) + margin * 2;
         const originX = (square - mw) / 2;
         const originY = (square - contentH) / 2;
+        let captionSvg = "";
+        if (showCaption) {
+          const blockH = captionLines.length * lineH;
+          /* クワイエットゾーン下端から表示域 (正方形) 下端までの帯の縦中央に
+             文字ブロックが来るようにする */
+          const qzBottom = mh;
+          const bandH = square - originY - qzBottom;
+          const startTop = qzBottom + (bandH - blockH) / 2;
+          captionSvg = `<g font-family="monospace" font-size="${fontSize}" text-anchor="middle" fill="${state.fg}">` +
+            captionLines.map((line, i) => `<text x="${mw / 2}" y="${startTop + i * lineH + fontSize}">${escapeXml(line)}</text>`).join("") +
+            `</g>`;
+        }
         svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${square} ${square}" ` +
           `width="${square * 10}" height="${square * 10}" shape-rendering="crispEdges">` +
           `<rect width="100%" height="100%" fill="${outerColor}"/>` +
@@ -1503,6 +1559,13 @@
         : [];
       const combinedH = showCombined ? combinedLines.length * combinedLineH + combinedFontSize * 0.6 : 0;
       const totalH = gridH + combinedH;
+      /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、グリッド全体はその中央に
+         配置される。書き出しもそれをそのまま再現する。常に一定の余白 (margin) を
+         四辺に確保した上で正方形化する。 */
+      const margin = Math.round(Math.max(totalW, totalH) * 0.12);
+      const square = Math.max(totalW, totalH) + margin * 2;
+      const originX = (square - totalW) / 2;
+      const originY = (square - totalH) / 2;
       let groups = "";
       results.forEach((r, i) => {
         const qz = r.quietZone;
@@ -1526,9 +1589,12 @@
         }
         let captionSvg = "";
         if (showCaptions) {
-          /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
+          /* このコードのクワイエットゾーン下端からセル (キャプション込み) 下端までの
+             帯の縦中央に文字ブロックが来るようにする */
           const blockH = cellLines[i].length * cellLineH;
-          const startTop = cellY + maxMh + (captionH - blockH) / 2;
+          const qzBottom = baseY + dims[i].mh;
+          const bandH = cellY + maxMh + captionH - qzBottom;
+          const startTop = qzBottom + (bandH - blockH) / 2;
           captionSvg = `<g font-family="monospace" font-size="${cellFontSize}" text-anchor="middle" fill="${state.fg}">` +
             cellLines[i].map((line, li) => `<text x="${cellX + maxMw / 2}" y="${startTop + li * cellLineH + cellFontSize}">${escapeXml(line)}</text>`).join("") +
             `</g>`;
@@ -1539,16 +1605,14 @@
       let combinedSvg = "";
       if (showCombined) {
         const combinedBlockH = combinedLines.length * combinedLineH;
-        const combinedStartTop = gridH + (combinedH - combinedBlockH) / 2;
+        /* グリッド下端から表示域 (正方形) 下端までの帯の縦中央に文字ブロックが来るようにする */
+        const gridBottomLocal = gridH;
+        const bandH = (square - originY) - gridBottomLocal;
+        const combinedStartTop = gridBottomLocal + (bandH - combinedBlockH) / 2;
         combinedSvg = `<g font-family="monospace" font-size="${combinedFontSize}" text-anchor="middle" fill="${state.fg}">` +
           combinedLines.map((line, li) => `<text x="${totalW / 2}" y="${combinedStartTop + li * combinedLineH + combinedFontSize}">${escapeXml(line)}</text>`).join("") +
           `</g>`;
       }
-      /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、グリッド全体はその中央に
-         配置される。書き出しもそれをそのまま再現する。 */
-      const square = Math.max(totalW, totalH);
-      const originX = (square - totalW) / 2;
-      const originY = (square - totalH) / 2;
       svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${square} ${square}" ` +
         `width="${square * 10}" height="${square * 10}" shape-rendering="crispEdges">` +
         `<rect width="100%" height="100%" fill="${outerColor}"/>` +
@@ -2112,6 +2176,22 @@
     });
   }
   dataInput.addEventListener("input", render);
+
+  /* 入力部右上の「全削除」ボタン: 入力文字列だけを消す (規格・色などの設定は保持) */
+  $("data-clear-btn").addEventListener("click", () => {
+    dataInput.value = "";
+    dataInput.focus();
+    render();
+  });
+
+  /* サイトタイトル下の「初回ロード時の状態に戻す」ボタン: URL のクエリパラメーターを
+     含め、入力内容・色・複雑度などすべての設定を初回アクセス時の状態にリセットする。
+     状態を1つずつ手動で戻すと漏れが出やすいため、URL を素の状態にしてページ自体を
+     再読み込みする方式にする。 */
+  $("reset-all-btn").addEventListener("click", () => {
+    if (!confirm("入力内容や設定をすべて初回ロード時の状態に戻します。よろしいですか?")) return;
+    location.href = location.pathname;
+  });
 
   /* モバイル用の折りたたみメニュー (規格選択・デコード) の開閉制御 */
   function closeQuickCombos() {

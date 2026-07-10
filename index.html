@@ -257,6 +257,7 @@
           </div>
         </div>
       </div>
+      <button type="button" class="small-button" id="reset-all-btn">条件をリセット</button>
     </nav>
 
     <main class="center-content-zone layout">
@@ -288,8 +289,11 @@
         <div class="content-bottom">
           <div class="field" id="data-field">
             <label for="data-input">入力部</label>
-            <textarea id="data-input" rows="2" spellcheck="false"
-              placeholder="エンコードする文字列を入力">https://www.qrcode.com/</textarea>
+            <div class="data-input-wrap">
+              <textarea id="data-input" rows="2" spellcheck="false"
+                placeholder="エンコードする文字列を入力">https://www.qrcode.com/</textarea>
+              <button type="button" class="small-button data-clear-btn" id="data-clear-btn" title="入力内容を全て削除">✕</button>
+            </div>
           </div>
 
           <div class="field" id="color-field">

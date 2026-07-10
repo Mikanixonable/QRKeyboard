@@ -363,6 +363,21 @@ textarea {
   font: inherit;
   padding: 7px 10px;
 }
+.data-input-wrap { position: relative; }
+.data-input-wrap textarea { padding-right: 34px; }
+.small-button.data-clear-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
 textarea:focus, select:focus, input:focus-visible,
 .seg-btn:focus-visible, .tab:focus-visible, .small-button:focus-visible {
   outline: 2px solid var(--accent);
@@ -501,6 +516,7 @@ textarea:focus, select:focus, input:focus-visible,
   gap: 6px;
 }
 .decode-group .small-button { width: 100%; }
+#reset-all-btn { width: 100%; }
 .scan-status {
   font-size: 11px;
   color: var(--text-sub);
