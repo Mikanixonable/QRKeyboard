@@ -46,6 +46,7 @@
     splitMode: "simple", // "simple" | "structured" (QR の Structured Append)
     showContent: true,
     contentPlacement: "combined", // "each" | "combined" | "both" (複数コード表示時のみ有効)
+    saveScope: "code", // "code" (クワイエットゾーンまで) | "full" (背景・内容表示を含む)
     qr: { ec: "M", versionAuto: true, version: 5, maskAuto: true, mask: 0 },
     micro: { ec: "L", versionAuto: true, version: 4, maskAuto: true, mask: 0 },
     rmqr: { ec: "M", versionAuto: true, height: 11, width: 43 },
@@ -143,7 +144,7 @@
     box.textContent = "";
     const std = state.standard;
     const st = state[std];
-    label.textContent = std === "barcode" ? "種類" : "複雑度(型番)";
+    label.textContent = std === "barcode" ? "種類" : "型番(複雑度)";
 
     if (std === "barcode") {
       const seg = document.createElement("div");
@@ -423,6 +424,22 @@
     });
   }
 
+  /* 保存/コピーで書き出す範囲: クワイエットゾーンまでか、背景色 (と内容表示のテキスト) を
+     含めるか。バーコード (1次元) はもともと背景全体を書き出しているため対象外。 */
+  function buildSaveScopeControl() {
+    const field = $("save-scope-field");
+    const box = $("save-scope-control");
+    field.hidden = state.standard === "barcode";
+    if (field.hidden) return;
+    box.textContent = "";
+    [["コードのみ", "code"], ["背景を含む", "full"]].forEach(([label, v]) => {
+      box.appendChild(makeSegButton(label, state.saveScope === v, () => {
+        state.saveScope = v;
+        rebuildControls();
+      }));
+    });
+  }
+
   function rebuildControls() {
     $("preview").classList.toggle("other-standard", !QR_FAMILY.includes(state.standard));
     buildEcControl();
@@ -431,6 +448,7 @@
     buildBarcodeTextControl();
     buildSplitModeControl();
     buildContentDisplayControl();
+    buildSaveScopeControl();
   }
 
   /* ---------- エンコード ---------- */
@@ -570,6 +588,30 @@
     return { lines: lines.length ? lines : [""], truncated };
   }
 
+  /* SVG 書き出し用。SVG にはキャンバスの measureText 相当がないため、
+     monospace フォントの等幅性を利用して文字数ベースで折り返す簡易版。 */
+  function wrapMonospace(text, fontSize, maxWidth, maxLines) {
+    const charW = fontSize * 0.6;
+    const maxChars = Math.max(1, Math.floor(maxWidth / charW));
+    const lines = [];
+    let remaining = text;
+    while (remaining.length > 0 && lines.length < maxLines) {
+      if (remaining.length <= maxChars) {
+        lines.push(remaining);
+        remaining = "";
+        break;
+      }
+      if (lines.length === maxLines - 1) {
+        lines.push(remaining.slice(0, Math.max(1, maxChars - 1)) + "…");
+        remaining = "";
+        break;
+      }
+      lines.push(remaining.slice(0, maxChars));
+      remaining = remaining.slice(maxChars);
+    }
+    return lines.length ? lines : [""];
+  }
+
   /* 行数上限に収まらない場合は、収まるようになるまでフォントサイズを縮小する。
      最小サイズでも収まらなければ、その時点で省略する。 */
   function fitCaptionLines(context, text, maxWidth, maxLines, basePx, minPx) {
@@ -679,8 +721,10 @@
         ctx.textBaseline = "top";
         const maxW = canvas.width - 8 * dpr;
         const lineH = Math.round(captionFontPx * 1.4);
+        /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
+        const startY = mh * scale + (captionH - lines.length * lineH) / 2;
         lines.forEach((line, i) => {
-          ctx.fillText(line, canvas.width / 2, mh * scale + 3 * dpr + i * lineH, maxW);
+          ctx.fillText(line, canvas.width / 2, startY + i * lineH, maxW);
         });
       }
       lastDraw = { scale, qz, dpr };
@@ -772,8 +816,10 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         const maxW = cellW - 4 * dpr;
+        const blockH = cellLines[i].length * cellLineH;
+        const startY = cellY + cellH + (captionH - blockH) / 2;
         cellLines[i].forEach((line, li) => {
-          ctx.fillText(line, cellX + cellW / 2, cellY + cellH + 2 * dpr + li * cellLineH, maxW);
+          ctx.fillText(line, cellX + cellW / 2, startY + li * cellLineH, maxW);
         });
       }
     }
@@ -782,8 +828,10 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       const maxW = availW - 8 * dpr;
+      const blockH = combinedLines.length * combinedLineH;
+      const startY = gridAvailH + (availH - gridAvailH - blockH) / 2;
       combinedLines.forEach((line, li) => {
-        ctx.fillText(line, canvas.width / 2, gridAvailH + 3 * dpr + li * combinedLineH, maxW);
+        ctx.fillText(line, canvas.width / 2, startY + li * combinedLineH, maxW);
       });
     }
     lastDraw = null;
@@ -1117,6 +1165,8 @@
         octx.textBaseline = "top";
         octx.fillText(r.display, off.width / 2, barH + 24, off.width);
       }
+    } else if (results.length === 1 && state.saveScope === "full") {
+      renderFullSingleCanvas(off, octx);
     } else if (results.length === 1) {
       const r = results[0];
       const qz = r.quietZone;
@@ -1132,6 +1182,8 @@
           if (current.modulesList[0][y][x]) octx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
         }
       }
+    } else if (state.saveScope === "full") {
+      renderFullMultiCanvas(off, octx);
     } else {
       const { cols, rows } = gridDims(results.length);
       const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
@@ -1159,6 +1211,159 @@
       });
     }
     return off;
+  }
+
+  /* 単一コードを、背景色 (クワイエットゾーンの外側) と内容表示テキストまで含めて
+     書き出す (renderPngCanvas の「背景を含む」モード用)。オンスクリーン描画の
+     drawCurrent() と同じ構図を、保存用の高解像度スケールで再現する。 */
+  function renderFullSingleCanvas(off, octx) {
+    const r = current.results[0];
+    const qz = r.quietZone;
+    const mw = r.width + qz * 2, mh = r.height + qz * 2;
+    const scale = Math.max(4, Math.min(16, Math.floor(2048 / Math.max(mw, mh))));
+    const outerColor = state.outerSame ? state.bg : state.outerBg;
+    const showCaption = effectivePlacement() === "each";
+    const fontPxBase = Math.max(14, Math.round(scale * 2.2));
+    const fontPxMin = Math.max(8, Math.round(scale));
+    let lines = [], captionFontPx = fontPxBase, captionH = 0;
+    if (showCaption) {
+      const maxW = Math.max(20, mw * scale - 16);
+      const fit = fitCaptionLines(octx, perCodeContentText(0), maxW, 3, fontPxBase, fontPxMin);
+      captionFontPx = fit.fontPx;
+      lines = fit.lines;
+      const lineH = Math.round(captionFontPx * 1.4);
+      captionH = lines.length * lineH + 12;
+    }
+    /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、コード (+内容表示) は
+       その中央に配置される。書き出しもそれをそのまま再現する。 */
+    const contentW = mw * scale, contentH = mh * scale + captionH;
+    const square = Math.max(contentW, contentH);
+    off.width = square;
+    off.height = square;
+    const originX = (square - contentW) / 2;
+    const originY = (square - contentH) / 2;
+    octx.fillStyle = outerColor;
+    octx.fillRect(0, 0, off.width, off.height);
+    octx.fillStyle = state.bg;
+    octx.fillRect(originX, originY, mw * scale, mh * scale);
+    octx.fillStyle = state.fg;
+    const modules = current.modulesList[0];
+    for (let y = 0; y < r.height; y++) {
+      for (let x = 0; x < r.width; x++) {
+        if (modules[y][x]) octx.fillRect(originX + (x + qz) * scale, originY + (y + qz) * scale, scale, scale);
+      }
+    }
+    if (showCaption) {
+      octx.font = `${captionFontPx}px monospace`;
+      octx.textAlign = "center";
+      octx.textBaseline = "top";
+      const lineH = Math.round(captionFontPx * 1.4);
+      const maxW = contentW - 16;
+      /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
+      const startY = originY + mh * scale + (captionH - lines.length * lineH) / 2;
+      lines.forEach((line, i) => octx.fillText(line, originX + contentW / 2, startY + i * lineH, maxW));
+    }
+  }
+
+  /* 複数コードを、背景色と内容表示テキストまで含めて書き出す (「背景を含む」モード用) */
+  function renderFullMultiCanvas(off, octx) {
+    const results = current.results;
+    const { cols, rows } = gridDims(results.length);
+    const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
+    const maxMw = Math.max(...dims.map((d) => d.mw));
+    const maxMh = Math.max(...dims.map((d) => d.mh));
+    const scale = Math.max(2, Math.min(16, Math.floor(2048 / (Math.max(maxMw, maxMh) * Math.max(cols, rows)))));
+    const gap = 4 * scale;
+    const cellW = maxMw * scale, cellH = maxMh * scale;
+    const outerColor = state.outerSame ? state.bg : state.outerBg;
+    const placement = effectivePlacement();
+    const showCaptions = placement === "each" || placement === "both";
+    const showCombined = placement === "combined" || placement === "both";
+
+    const cellFontPxBase = Math.max(14, Math.round(scale * 2.2));
+    const cellFontPxMin = Math.max(8, Math.round(scale));
+    let cellFontPx = cellFontPxBase;
+    let cellLines = [];
+    if (showCaptions) {
+      for (let px = cellFontPxBase; px >= cellFontPxMin; px--) {
+        octx.font = `${px}px monospace`;
+        let allFit = true;
+        const trial = results.map((_, i) => {
+          const result = wrapToLines(octx, perCodeContentText(i), cellW - 8, 3);
+          if (result.truncated) allFit = false;
+          return result.lines;
+        });
+        cellFontPx = px;
+        cellLines = trial;
+        if (allFit) break;
+      }
+    }
+    const cellLineH = Math.round(cellFontPx * 1.4);
+    const maxCellLines = showCaptions ? Math.max(...cellLines.map((l) => l.length)) : 0;
+    const captionH = showCaptions ? maxCellLines * cellLineH + 8 : 0;
+    const totalGridW = cols * cellW + (cols - 1) * gap;
+
+    const combinedFontPxBase = Math.max(14, Math.round(scale * 2.2));
+    const combinedFontPxMin = Math.max(8, Math.round(scale));
+    const combinedRaw = combinedContentText();
+    const combinedFit = showCombined
+      ? fitCaptionLines(octx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, totalGridW - 16, 3, combinedFontPxBase, combinedFontPxMin)
+      : { fontPx: combinedFontPxBase, lines: [] };
+    const combinedFontPx = combinedFit.fontPx;
+    const combinedLines = combinedFit.lines;
+    const combinedLineH = Math.round(combinedFontPx * 1.4);
+    const combinedH = showCombined ? combinedLines.length * combinedLineH + 12 : 0;
+    const gridH = rows * (cellH + captionH) + (rows - 1) * gap;
+
+    /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、グリッド全体はその中央に
+       配置される。書き出しもそれをそのまま再現する。 */
+    const contentW = totalGridW, contentH = gridH + combinedH;
+    const square = Math.max(contentW, contentH);
+    off.width = square;
+    off.height = square;
+    const originX = (square - contentW) / 2;
+    const originY = (square - contentH) / 2;
+    octx.fillStyle = outerColor;
+    octx.fillRect(0, 0, off.width, off.height);
+    results.forEach((r, i) => {
+      const qz = r.quietZone;
+      const col = i % cols, row = Math.floor(i / cols);
+      const cellX = originX + col * (cellW + gap);
+      const cellY = originY + row * (cellH + captionH + gap);
+      const offX = cellX + (cellW - dims[i].mw * scale) / 2;
+      const offY = cellY + (cellH - dims[i].mh * scale) / 2;
+      octx.fillStyle = state.bg;
+      octx.fillRect(offX, offY, dims[i].mw * scale, dims[i].mh * scale);
+      octx.fillStyle = state.fg;
+      const modules = current.modulesList[i];
+      for (let y = 0; y < r.height; y++) {
+        for (let x = 0; x < r.width; x++) {
+          if (modules[y][x]) octx.fillRect(offX + (x + qz) * scale, offY + (y + qz) * scale, scale, scale);
+        }
+      }
+      if (showCaptions) {
+        octx.font = `${cellFontPx}px monospace`;
+        octx.textAlign = "center";
+        octx.textBaseline = "top";
+        const maxW = cellW - 4;
+        const blockH = cellLines[i].length * cellLineH;
+        const startY = cellY + cellH + (captionH - blockH) / 2;
+        cellLines[i].forEach((line, li) => {
+          octx.fillText(line, cellX + cellW / 2, startY + li * cellLineH, maxW);
+        });
+      }
+    });
+    if (showCombined) {
+      octx.font = `${combinedFontPx}px monospace`;
+      octx.textAlign = "center";
+      octx.textBaseline = "top";
+      const maxW = contentW - 16;
+      const blockH = combinedLines.length * combinedLineH;
+      const startY = originY + gridH + (combinedH - blockH) / 2;
+      combinedLines.forEach((line, li) => {
+        octx.fillText(line, originX + contentW / 2, startY + li * combinedLineH, maxW);
+      });
+    }
   }
 
   $("save-png").addEventListener("click", () => {
@@ -1240,9 +1445,114 @@
           } else x++;
         }
       }
-      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${mw} ${mh}" ` +
-        `width="${mw * 10}" height="${mh * 10}" shape-rendering="crispEdges">` +
-        `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}</g></svg>`;
+      if (state.saveScope === "full") {
+        const outerColor = state.outerSame ? state.bg : state.outerBg;
+        const showCaption = effectivePlacement() === "each";
+        let captionH = 0, captionSvg = "";
+        if (showCaption) {
+          const fontSize = Math.max(3, Math.round(mw * 0.045));
+          const lines = wrapMonospace(perCodeContentText(0), fontSize, mw - fontSize, 3);
+          const lineH = fontSize * 1.4;
+          captionH = lines.length * lineH + fontSize * 0.6;
+          /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
+          const startTop = mh + (captionH - lines.length * lineH) / 2;
+          captionSvg = `<g font-family="monospace" font-size="${fontSize}" text-anchor="middle" fill="${state.fg}">` +
+            lines.map((line, i) => `<text x="${mw / 2}" y="${startTop + i * lineH + fontSize}">${escapeXml(line)}</text>`).join("") +
+            `</g>`;
+        }
+        /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、コード (+内容表示) は
+           その中央に配置される。書き出しもそれをそのまま再現する。 */
+        const contentH = mh + captionH;
+        const square = Math.max(mw, contentH);
+        const originX = (square - mw) / 2;
+        const originY = (square - contentH) / 2;
+        svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${square} ${square}" ` +
+          `width="${square * 10}" height="${square * 10}" shape-rendering="crispEdges">` +
+          `<rect width="100%" height="100%" fill="${outerColor}"/>` +
+          `<g transform="translate(${originX} ${originY})">` +
+          `<rect x="0" y="0" width="${mw}" height="${mh}" fill="${state.bg}"/>` +
+          `<g fill="${state.fg}">${rects}</g>${captionSvg}</g></svg>`;
+      } else {
+        svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${mw} ${mh}" ` +
+          `width="${mw * 10}" height="${mh * 10}" shape-rendering="crispEdges">` +
+          `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}</g></svg>`;
+      }
+    } else if (state.saveScope === "full") {
+      const { cols, rows } = gridDims(results.length);
+      const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
+      const maxMw = Math.max(...dims.map((d) => d.mw));
+      const maxMh = Math.max(...dims.map((d) => d.mh));
+      const gap = Math.round(maxMw * 0.15);
+      const outerColor = state.outerSame ? state.bg : state.outerBg;
+      const placement = effectivePlacement();
+      const showCaptions = placement === "each" || placement === "both";
+      const showCombined = placement === "combined" || placement === "both";
+      const cellFontSize = Math.max(3, Math.round(maxMw * 0.045));
+      const cellLineH = cellFontSize * 1.4;
+      const cellLines = showCaptions
+        ? results.map((_, i) => wrapMonospace(perCodeContentText(i), cellFontSize, maxMw - cellFontSize, 3))
+        : [];
+      const captionH = showCaptions ? Math.max(...cellLines.map((l) => l.length)) * cellLineH + cellFontSize * 0.6 : 0;
+      const totalW = cols * maxMw + (cols - 1) * gap;
+      const gridH = rows * (maxMh + captionH) + (rows - 1) * gap;
+      const combinedFontSize = Math.max(3, Math.round(totalW * 0.03));
+      const combinedLineH = combinedFontSize * 1.4;
+      const combinedRaw = combinedContentText();
+      const combinedLines = showCombined
+        ? wrapMonospace(combinedRaw == null ? "(読み取り不能)" : combinedRaw, combinedFontSize, totalW - combinedFontSize, 3)
+        : [];
+      const combinedH = showCombined ? combinedLines.length * combinedLineH + combinedFontSize * 0.6 : 0;
+      const totalH = gridH + combinedH;
+      let groups = "";
+      results.forEach((r, i) => {
+        const qz = r.quietZone;
+        const col = i % cols, row = Math.floor(i / cols);
+        const cellX = col * (maxMw + gap);
+        const cellY = row * (maxMh + captionH + gap);
+        const baseX = cellX + (maxMw - dims[i].mw) / 2;
+        const baseY = cellY + (maxMh - dims[i].mh) / 2;
+        const modules = current.modulesList[i];
+        let rects = "";
+        for (let y = 0; y < r.height; y++) {
+          let x = 0;
+          while (x < r.width) {
+            if (modules[y][x]) {
+              let run = 1;
+              while (x + run < r.width && modules[y][x + run]) run++;
+              rects += `<rect x="${x + qz}" y="${y + qz}" width="${run}" height="1"/>`;
+              x += run;
+            } else x++;
+          }
+        }
+        let captionSvg = "";
+        if (showCaptions) {
+          /* クワイエットゾーン下端と表示域下端の中間に文字ブロックが来るよう縦中央揃えにする */
+          const blockH = cellLines[i].length * cellLineH;
+          const startTop = cellY + maxMh + (captionH - blockH) / 2;
+          captionSvg = `<g font-family="monospace" font-size="${cellFontSize}" text-anchor="middle" fill="${state.fg}">` +
+            cellLines[i].map((line, li) => `<text x="${cellX + maxMw / 2}" y="${startTop + li * cellLineH + cellFontSize}">${escapeXml(line)}</text>`).join("") +
+            `</g>`;
+        }
+        groups += `<rect x="${baseX}" y="${baseY}" width="${dims[i].mw}" height="${dims[i].mh}" fill="${state.bg}"/>` +
+          `<g transform="translate(${baseX} ${baseY})" fill="${state.fg}">${rects}</g>${captionSvg}`;
+      });
+      let combinedSvg = "";
+      if (showCombined) {
+        const combinedBlockH = combinedLines.length * combinedLineH;
+        const combinedStartTop = gridH + (combinedH - combinedBlockH) / 2;
+        combinedSvg = `<g font-family="monospace" font-size="${combinedFontSize}" text-anchor="middle" fill="${state.fg}">` +
+          combinedLines.map((line, li) => `<text x="${totalW / 2}" y="${combinedStartTop + li * combinedLineH + combinedFontSize}">${escapeXml(line)}</text>`).join("") +
+          `</g>`;
+      }
+      /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、グリッド全体はその中央に
+         配置される。書き出しもそれをそのまま再現する。 */
+      const square = Math.max(totalW, totalH);
+      const originX = (square - totalW) / 2;
+      const originY = (square - totalH) / 2;
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${square} ${square}" ` +
+        `width="${square * 10}" height="${square * 10}" shape-rendering="crispEdges">` +
+        `<rect width="100%" height="100%" fill="${outerColor}"/>` +
+        `<g transform="translate(${originX} ${originY})">${groups}${combinedSvg}</g></svg>`;
     } else {
       const { cols, rows } = gridDims(results.length);
       const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
