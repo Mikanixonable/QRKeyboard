@@ -161,3 +161,4 @@ Aztec Rune, CODABLOCK F, PDF417, UPC-A/UPC-E, Code 93, Codabar, ITF/ITF-14, Indu
 - 2つ必要な条件、3つ必要な条件も色分けしたい
 色分けの説明が欲しい
 - マスクパターンはアイコンが欲しい
+- たまに読めないバーコードがある
