@@ -89,6 +89,94 @@ body {
   height: 18px;
   fill: var(--text);
 }
+/* デスクトップではタイトルと簡易選択を素直に縦積みさせたいので透過させ、
+   モバイルのみ1行にまとめる (下の @media 参照) */
+.mobile-top-bar { display: contents; }
+/* モバイル幅でのみ表示する簡易選択 (規格選択・デコード操作を折りたたみメニューに
+   集約し縦幅を節約。デスクトップのリッチカードと見た目を揃えるため、単純な
+   <select> ではなく自前のボタン+パネルで実装する) */
+.mobile-quick-select { display: none; }
+.quick-combo { position: relative; flex: 1; min-width: 0; }
+.quick-combo-btn {
+  width: 100%;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 5px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.quick-combo-current {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+}
+.quick-combo-current strong,
+.quick-combo-current .tab-rich-title {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.quick-combo-current strong,
+.quick-combo-current .tab-rich-title span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 折りたたみ時 (未展開) は横幅を節約するためタイトルのみ表示し、
+   説明文は省略する (説明は展開したパネル側で確認できる) */
+.quick-combo-current small,
+.quick-combo-current .tab-rich-desc { display: none; }
+.quick-combo-current .tab-rich-badge { width: 12px; height: 12px; }
+.quick-combo-caret { flex: none; width: 9px; height: 6px; fill: var(--text-sub); }
+.quick-combo-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 30;
+  max-height: min(70vh, 480px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.quick-combo-panel[hidden] { display: none; }
+/* 折りたたみボタン自体は横並びの片側 (flex:1) の幅しかないため、展開時は
+   中身 (アイコン・説明つきのリッチカード等) が崩れないよう約2倍の幅を確保する。
+   はみ出す側は互いに逆方向へ広げ、画面端からあふれないようにする */
+#standard-combo .quick-combo-panel { left: 0; width: 200%; }
+#decode-combo .quick-combo-panel { right: 0; width: 200%; }
+.quick-combo-option {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.quick-combo-option:hover { border-color: var(--accent); color: var(--accent); }
+.quick-combo-note {
+  font-size: 10px;
+  color: var(--text-sub);
+  line-height: 1.4;
+}
+
 .tabs-vertical {
   display: flex;
   flex-direction: column;
@@ -197,6 +285,11 @@ body {
   border-left: 1px solid var(--border);
   overflow-y: auto;
 }
+/* モバイルのみタブで2枚に分ける (右メニューゾーンの縦幅節約用)。
+   デスクトップでは display:contents で透過させ、従来通り .field が
+   直接 .right-menu-zone の flex レイアウトに参加する */
+.right-menu-tabs { display: none; }
+.right-menu-panel { display: contents; }
 
 /* ---------- 中央コンテンツゾーン ---------- */
 .center-content-zone.layout {
@@ -227,6 +320,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.04em;
 }
 .qr-frame {
   flex: 1;
@@ -526,49 +623,131 @@ textarea:focus, select:focus, input:focus-visible,
     overflow-y: visible;
   }
   .left-menu-zone {
-    padding: 10px 12px;
+    padding: 8px 12px;
+    gap: 8px;
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
   .right-menu-zone {
     border-left: none;
     border-top: 1px solid var(--border);
-    padding: 10px 12px;
+    padding: 8px 12px;
+    gap: 8px;
   }
-  .site-title { font-size: 14px; }
+  .site-title { font-size: 13px; flex: none; }
   .tab { padding: 3px 10px; font-size: 12px; }
+
+  /* タイトルと規格選択・デコードの折りたたみメニューを1行にまとめ、
+     ページ最上部の縦幅を節約する */
+  .mobile-top-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  /* 規格選択とデコード操作を折りたたみメニュー2つに集約し、縦幅のかさむ
+     常設のリッチカード・デコードボタン・注意書きは非表示にする
+     (中身は .quick-combo-panel 側に複製済み・説明書きも複製して表示する) */
+  .mobile-quick-select { display: flex; flex: 1; gap: 6px; }
+  .left-menu-zone > .tabs-vertical { display: none; }
+  #scan-camera-btn, #scan-image-btn, .scan-note,
+  .tab-category[data-category="decode"] .tab-category-label { display: none; }
 
   .center-content-zone.layout {
     flex: none;
     flex-direction: column;
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
-  .preview { flex: none; gap: 10px; }
+  .preview { flex: none; gap: 8px; }
 
   /* データ・色は縦並びに */
-  .content-top { flex-direction: column; gap: 10px; }
+  .content-top { flex-direction: column; gap: 8px; }
 
-  /* QR 表示域は残り高さを埋めるのではなく、幅基準の正方形として確保する */
-  .content-middle { flex: none; }
+  /* QR 表示域は残り高さを埋めるのではなく、幅基準の正方形として確保する。
+     縦幅節約のため、デスクトップ相当 (420px) の6割程度に縮小する。
+     保存ボタン列もこの横幅に揃える (--qr-frame-width で一元管理) */
+  .content-middle { flex: none; gap: 4px; --qr-frame-width: 250px; }
   .qr-frame {
     flex: none;
     width: 100%;
-    max-width: 420px;
+    max-width: var(--qr-frame-width);
     aspect-ratio: 1 / 1;
     margin: 0 auto;
   }
+  .save-menu {
+    width: 100%;
+    max-width: var(--qr-frame-width);
+    margin: 0 auto;
+    flex-wrap: wrap;
+  }
 
-  .content-bottom { min-height: 0; }
+  .content-bottom { min-height: 0; gap: 8px; }
   .version-box { min-height: 0; }
 
   textarea { padding: 5px 8px; }
-  #data-input { height: 2.8em; }
+  /* 3行ぶん確保 (line-height 1.5em × 3 + 上下パディング) */
+  #data-input { height: 4.5em; }
   .seg-btn { min-width: 36px; padding: 4px 0; font-size: 12px; }
-  .info { padding: 4px 10px; gap: 1px 12px; font-size: 11px; }
+
+  /* 「出力部」「入力部」ラベルは縦幅節約のため視覚的に非表示にする
+     (スクリーンリーダー向けには残す) */
+  #qr-zone > label[for="qr-zone"],
+  #data-field > label[for="data-input"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  /* 諸元: デスクトップは QR 表示域の大きさを保つため2行ぶんに固定しているが、
+     モバイルはページ全体がスクロールするためその制約が不要。折り返した分だけ
+     素直に高さを取り、内容が見切れないようにする */
+  .info { padding: 6px 10px; gap: 2px 12px; font-size: 11px; height: auto; overflow: visible; }
+  .info-content dd { max-height: none; overflow: visible; }
+  /* 「諸元」タブに移した際、タブ名と重複するフィールド自身のラベルは非表示にする */
+  #right-menu-info-panel #info-label { display: none; }
+  #right-menu-color-panel #color-label { display: none; }
+
+  /* 右メニューゾーンをタブ3枚 (設定 / 型式 / 諸元) に分けて縦幅を節約。
+     ボタンの見た目だと切り替え UI だとわかりにくいため、下線でアクティブ
+     タブを示す「ノートブックタブ」風の見た目にする */
+  .right-menu-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+  }
+  .right-menu-tab-btn {
+    flex: 1;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    background: none;
+    color: var(--text-sub);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 4px;
+    cursor: pointer;
+  }
+  .right-menu-tab-btn[aria-selected="true"] {
+    color: var(--accent);
+    font-weight: 700;
+    border-bottom-color: var(--accent);
+  }
+  .right-menu-panel { display: flex; flex-direction: column; gap: 16px; }
+  .right-menu-panel.tab-inactive { display: none; }
+}
+
+/* 縦幅の低いモバイル (iPhone SE 等) では QR 表示域と余白をさらに切り詰める */
+@media (max-width: 760px) and (max-height: 700px) {
+  .content-middle { gap: 2px; --qr-frame-width: 190px; }
+  .preview { gap: 6px; }
+  .center-content-zone.layout { padding: 6px 12px; }
+  .left-menu-zone, .right-menu-zone { padding: 6px 12px; gap: 6px; }
 }
 
 /* 高さの低い横向きモバイルなど */
 @media (max-height: 460px) {
   .left-menu-zone { padding: 4px 12px 2px; }
-  #data-input { height: 2.2em; }
 }

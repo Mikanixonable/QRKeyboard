@@ -1774,19 +1774,99 @@
 
   /* ---------- タブ切り替え ---------- */
 
+  /* モバイル用「規格選択」パネル: デスクトップの .tabs-vertical をそのまま
+     複製し (アイコン・説明文つきのリッチな見た目を再利用)、折りたたみ式の
+     ボタン+パネルとして表示する */
+  const standardComboPanel = $("standard-combo-panel");
+  standardComboPanel.appendChild(
+    document.querySelector(".left-menu-zone > .tabs-vertical").cloneNode(true)
+  );
+
   function selectStandard(std) {
     state.standard = std;
     for (const tab of document.querySelectorAll(".tab")) {
       tab.setAttribute("aria-selected", tab.dataset.standard === std ? "true" : "false");
     }
+    const source = document.querySelector(`.left-menu-zone > .tabs-vertical .tab-rich[data-standard="${std}"]`);
+    if (source) $("standard-combo-current").innerHTML = source.querySelector(".tab-rich-main").innerHTML;
     rebuildControls();
     render();
   }
 
   for (const tab of document.querySelectorAll(".tab")) {
-    tab.addEventListener("click", () => selectStandard(tab.dataset.standard));
+    tab.addEventListener("click", () => {
+      selectStandard(tab.dataset.standard);
+      closeQuickCombos();
+    });
   }
   dataInput.addEventListener("input", render);
+
+  /* モバイル用の折りたたみメニュー (規格選択・デコード) の開閉制御 */
+  function closeQuickCombos() {
+    for (const combo of document.querySelectorAll(".quick-combo")) {
+      combo.querySelector(".quick-combo-panel").hidden = true;
+      combo.querySelector(".quick-combo-btn").setAttribute("aria-expanded", "false");
+    }
+  }
+  function toggleQuickCombo(combo) {
+    const panel = combo.querySelector(".quick-combo-panel");
+    const wasHidden = panel.hidden;
+    closeQuickCombos();
+    panel.hidden = !wasHidden;
+    combo.querySelector(".quick-combo-btn").setAttribute("aria-expanded", wasHidden ? "true" : "false");
+  }
+  $("standard-combo-btn").addEventListener("click", () => toggleQuickCombo($("standard-combo")));
+  $("decode-combo-btn").addEventListener("click", () => toggleQuickCombo($("decode-combo")));
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest(".quick-combo")) closeQuickCombos();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closeQuickCombos();
+  });
+  $("decode-combo-camera").addEventListener("click", () => {
+    closeQuickCombos();
+    startCameraScan();
+  });
+  $("decode-combo-image").addEventListener("click", () => {
+    closeQuickCombos();
+    scanFileInput.click();
+  });
+
+  /* 右メニューゾーンのタブ切り替え (モバイルのみ CSS で有効化) */
+  for (const btn of document.querySelectorAll(".right-menu-tab-btn")) {
+    btn.addEventListener("click", () => {
+      for (const b of document.querySelectorAll(".right-menu-tab-btn")) {
+        b.setAttribute("aria-selected", b === btn ? "true" : "false");
+      }
+      for (const panel of document.querySelectorAll(".right-menu-panel")) {
+        panel.classList.toggle("tab-inactive", panel.dataset.tab !== btn.dataset.tab);
+      }
+    });
+  }
+
+  /* 「諸元」「外観」はデスクトップでは中央カラムに置くが、モバイルでは
+     右メニューゾーンのタブに移して縦幅を節約する。DOM 上の1つの要素を、
+     幅の判定に応じて付け替える (2箇所に複製すると renderInfo() 等が
+     二重管理になるため)。デスクトップに戻す際は元の挿入位置 (親要素・
+     直後の兄弟要素) を記憶しておき、並び順が崩れないようにする */
+  function makeResponsiveMover(el, mobileHome) {
+    const desktopParent = el.parentElement;
+    const desktopNextSibling = el.nextSibling;
+    return () => {
+      if (mobileMq.matches) mobileHome.appendChild(el);
+      else desktopParent.insertBefore(el, desktopNextSibling);
+    };
+  }
+  const mobileMq = window.matchMedia("(max-width: 760px)");
+  const responsiveMovers = [
+    makeResponsiveMover($("info-field"), $("right-menu-info-panel")),
+    makeResponsiveMover($("color-field"), $("right-menu-color-panel")),
+  ];
+  function applyResponsiveMovers() {
+    responsiveMovers.forEach((move) => move());
+  }
+  mobileMq.addEventListener("change", applyResponsiveMovers);
+  applyResponsiveMovers();
 
   $("show-content-toggle").addEventListener("change", () => {
     state.showContent = $("show-content-toggle").checked;

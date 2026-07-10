@@ -13,14 +13,44 @@
 <body>
   <div class="site-body">
     <nav class="left-menu-zone" aria-label="左メニューゾーン">
-      <h1 class="site-title">
-        <svg class="site-title-icon" viewBox="0 0 16 16" aria-hidden="true">
-          <rect width="16" height="16" fill="none" />
-          <path
-            d="M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z" />
-        </svg>
-        QRKeyboard
-      </h1>
+      <div class="mobile-top-bar">
+        <h1 class="site-title">
+          <svg class="site-title-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <rect width="16" height="16" fill="none" />
+            <path
+              d="M1 1h6v6H1zM2 2v4h4V2zM3 3h2v2H3zM9 1h6v6H9zM10 2v4h4V2zM11 3h2v2h-2zM1 9h6v6H1zM2 10v4h4v-4zM3 11h2v2H3zM9 9h2v2H9zM13 9h2v2h-2zM11 11h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2z" />
+          </svg>
+          QRKeyboard
+        </h1>
+        <div class="mobile-quick-select">
+          <div class="quick-combo" id="standard-combo">
+            <button type="button" class="quick-combo-btn" id="standard-combo-btn" aria-haspopup="listbox" aria-expanded="false">
+              <span class="quick-combo-current" id="standard-combo-current"></span>
+              <svg class="quick-combo-caret" viewBox="0 0 10 6" aria-hidden="true">
+                <path d="M0 0h10L5 6z" />
+              </svg>
+            </button>
+            <div class="quick-combo-panel" id="standard-combo-panel" role="listbox" aria-label="コード規格" hidden></div>
+          </div>
+          <div class="quick-combo" id="decode-combo">
+            <button type="button" class="quick-combo-btn" id="decode-combo-btn" aria-haspopup="listbox" aria-expanded="false">
+              <span class="quick-combo-current">
+                <strong>デコード</strong>
+                <small>カメラ / 画像から読み取り</small>
+              </span>
+              <svg class="quick-combo-caret" viewBox="0 0 10 6" aria-hidden="true">
+                <path d="M0 0h10L5 6z" />
+              </svg>
+            </button>
+            <div class="quick-combo-panel" id="decode-combo-panel" role="listbox" aria-label="デコード" hidden>
+              <button type="button" class="quick-combo-option" id="decode-combo-camera">📷 カメラで読み取り</button>
+              <button type="button" class="quick-combo-option" id="decode-combo-image">🖼 画像を選択</button>
+              <p class="quick-combo-note">※ マイクロQR・rMQRは自前の検出処理で読み取ります(正面に近い角度で撮影/取り込みしてください)</p>
+              <p class="quick-combo-note">※ GS1 DataBar-14 は生成はできますが、読み取りライブラリ側の非互換により読み取れません</p>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="tabs-vertical" role="tablist" aria-label="コード規格">
         <div class="tab-category" data-category="2d">
           <div class="tab-category-label">二次元コード</div>
@@ -231,14 +261,34 @@
     <main class="center-content-zone layout">
       <section class="preview" id="preview">
         <div class="content-top">
+        </div>
+
+        <div class="content-middle" id="qr-zone">
+          <label for="qr-zone">出力部</label>
+          <div class="qr-frame">
+            <div class="qr-card" id="qr-card">
+              <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>
+              <video id="scan-video" hidden playsinline muted aria-label="カメラ映像"></video>
+              <p class="qr-message" id="qr-message" hidden></p>
+              <button type="button" class="small-button edit-reset" id="edit-reset" hidden>編集をリセット</button>
+            </div>
+          </div>
+          <div class="save-menu" id="save-menu">
+            <button type="button" class="small-button" id="save-png">PNG</button>
+            <button type="button" class="small-button" id="save-svg">SVG</button>
+            <button type="button" class="small-button" id="copy-png">コピー</button>
+          </div>
+        </div>
+
+        <div class="content-bottom">
           <div class="field" id="data-field">
-            <label for="data-input">データ</label>
+            <label for="data-input">入力部</label>
             <textarea id="data-input" rows="2" spellcheck="false"
               placeholder="エンコードする文字列を入力">https://www.qrcode.com/</textarea>
           </div>
 
-          <div class="field">
-            <label id="color-label">色</label>
+          <div class="field" id="color-field">
+            <label id="color-label">外観</label>
             <div class="color-row" aria-labelledby="color-label">
               <label class="color-item">
                 <input type="color" id="color-fg" value="#000000">
@@ -266,60 +316,54 @@
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="content-middle" id="qr-zone">
-          <div class="qr-frame">
-            <div class="qr-card" id="qr-card">
-              <canvas id="qr-canvas" role="img" aria-label="生成されたコード"></canvas>
-              <video id="scan-video" hidden playsinline muted aria-label="カメラ映像"></video>
-              <p class="qr-message" id="qr-message" hidden></p>
-              <button type="button" class="small-button edit-reset" id="edit-reset" hidden>編集をリセット</button>
-            </div>
-          </div>
-          <div class="field" id="info-field">
-            <label id="info-label">諸元</label>
-            <dl class="info" id="info"></dl>
-          </div>
-        </div>
-
-        <div class="content-bottom">
           <div class="field" id="barcode-text-field" hidden>
             <label id="barcode-text-label">表示</label>
             <div id="barcode-text-control"></div>
           </div>
-
-          <div class="save-menu" id="save-menu">
-            <button type="button" class="small-button" id="save-png">PNG保存</button>
-            <button type="button" class="small-button" id="save-svg">SVG保存</button>
-            <button type="button" class="small-button" id="copy-png">画像をコピー</button>
-          </div>
           <span class="copy-status" id="copy-status"></span>
+        </div>
+        <div class="field" id="info-field">
+          <label id="info-label">諸元</label>
+          <dl class="info" id="info"></dl>
         </div>
       </section>
     </main>
 
     <nav class="right-menu-zone" aria-label="右メニューゾーン">
-
-      <div class="field" id="split-mode-field" hidden>
-        <label id="split-mode-label">容量超過時の分割方式</label>
-        <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
+      <div class="right-menu-tabs">
+        <button type="button" class="right-menu-tab-btn" data-tab="0" aria-selected="false">外観</button>
+        <button type="button" class="right-menu-tab-btn" data-tab="1" aria-selected="true">設定</button>
+        <button type="button" class="right-menu-tab-btn" data-tab="2" aria-selected="false">型式</button>
+        <button type="button" class="right-menu-tab-btn" data-tab="3" aria-selected="false">諸元</button>
       </div>
 
-      <div class="field" id="version-field">
-        <label id="version-label">複雑度(型番)</label>
-        <div class="version-box" id="version-control"></div>
+      <div class="right-menu-panel tab-inactive" id="right-menu-color-panel" data-tab="0"></div>
+
+      <div class="right-menu-panel" data-tab="1">
+        <div class="field" id="ec-field">
+          <label id="ec-label">誤り訂正</label>
+          <div class="segmented" id="ec-control" role="radiogroup" aria-labelledby="ec-label"></div>
+        </div>
+
+        <div class="field" id="mask-field">
+          <label id="mask-label">マスクパターン</label>
+          <div class="segmented" id="mask-control" role="radiogroup" aria-labelledby="mask-label"></div>
+        </div>
+
+        <div class="field" id="split-mode-field" hidden>
+          <label id="split-mode-label">容量超過時の分割方式</label>
+          <div class="segmented" id="split-mode-control" role="radiogroup" aria-labelledby="split-mode-label"></div>
+        </div>
       </div>
 
-      <div class="field" id="ec-field">
-        <label id="ec-label">誤り訂正</label>
-        <div class="segmented" id="ec-control" role="radiogroup" aria-labelledby="ec-label"></div>
+      <div class="right-menu-panel tab-inactive" data-tab="2">
+        <div class="field" id="version-field">
+          <label id="version-label">複雑度(型番)</label>
+          <div class="version-box" id="version-control"></div>
+        </div>
       </div>
 
-
-      <div class="field" id="mask-field">
-        <label id="mask-label">マスクパターン</label>
-        <div class="segmented" id="mask-control" role="radiogroup" aria-labelledby="mask-label"></div>
+      <div class="right-menu-panel tab-inactive" id="right-menu-info-panel" data-tab="3">
       </div>
     </nav>
 
