@@ -648,6 +648,7 @@ textarea:focus, select:focus, input:focus-visible,
      常設のリッチカード・デコードボタン・注意書きは非表示にする
      (中身は .quick-combo-panel 側に複製済み・説明書きも複製して表示する) */
   .mobile-quick-select { display: flex; flex: 1; gap: 6px; }
+  #mobile-scan-status-slot:not(:empty) { margin-top: 4px; }
   .left-menu-zone > .tabs-vertical { display: none; }
   #scan-camera-btn, #scan-image-btn, .scan-note,
   .tab-category[data-category="decode"] .tab-category-label { display: none; }

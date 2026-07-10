@@ -1776,11 +1776,13 @@
 
   /* モバイル用「規格選択」パネル: デスクトップの .tabs-vertical をそのまま
      複製し (アイコン・説明文つきのリッチな見た目を再利用)、折りたたみ式の
-     ボタン+パネルとして表示する */
+     ボタン+パネルとして表示する。「デコード」カテゴリは規格選択と無関係な
+     操作ボタン (#scan-status 等) を含むため、複製すると id が重複して
+     document.getElementById 系のルックアップが壊れる。複製後に取り除く */
   const standardComboPanel = $("standard-combo-panel");
-  standardComboPanel.appendChild(
-    document.querySelector(".left-menu-zone > .tabs-vertical").cloneNode(true)
-  );
+  const tabsVerticalClone = document.querySelector(".left-menu-zone > .tabs-vertical").cloneNode(true);
+  tabsVerticalClone.querySelector('.tab-category[data-category="decode"]')?.remove();
+  standardComboPanel.appendChild(tabsVerticalClone);
 
   function selectStandard(std) {
     state.standard = std;
@@ -1861,6 +1863,11 @@
   const responsiveMovers = [
     makeResponsiveMover($("info-field"), $("right-menu-info-panel")),
     makeResponsiveMover($("color-field"), $("right-menu-color-panel")),
+    /* #scan-status は .tabs-vertical (デコードのカテゴリ内) に置かれているが、
+       モバイルでは .tabs-vertical ごと display:none になるため、カメラ起動
+       失敗時のエラーメッセージ等が一切見えなくなっていた。常に見える
+       mobile-top-bar の直下に付け替える */
+    makeResponsiveMover(scanStatus, $("mobile-scan-status-slot")),
   ];
   function applyResponsiveMovers() {
     responsiveMovers.forEach((move) => move());
