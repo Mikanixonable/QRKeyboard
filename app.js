@@ -407,8 +407,7 @@
     const field = $("content-display-field");
     const box = $("content-placement-control");
     const std = state.standard;
-    field.hidden = std === "barcode";
-    if (field.hidden) return;
+    field.hidden = false;
     const n = current ? current.results.length : 1;
     const structuredNow = std === "qr" && current && current.results[0] && current.results[0].structured;
     box.hidden = !(n > 1 && !structuredNow);
@@ -425,12 +424,11 @@
   }
 
   /* 保存/コピーで書き出す範囲: クワイエットゾーンまでか、背景色 (と内容表示のテキスト) を
-     含めるか。バーコード (1次元) はもともと背景全体を書き出しているため対象外。 */
+     含めるか。 */
   function buildSaveScopeControl() {
     const field = $("save-scope-field");
     const box = $("save-scope-control");
-    field.hidden = state.standard === "barcode";
-    if (field.hidden) return;
+    field.hidden = false;
     box.textContent = "";
     [["コードのみ", "code"], ["背景を含む", "full"]].forEach(([label, v]) => {
       box.appendChild(makeSegButton(label, state.saveScope === v, () => {
@@ -545,6 +543,10 @@
   const CANVAS_MARGIN = 16;
   /* 複数コード表示時の、コード間の最低間隔 */
   const GRID_GAP = 6;
+  /* 「コード (+内容表示)」ブロックが正方形の表示域に対して占める余白の割合。
+     画面表示・「背景を含む」書き出しの両方で共通して使い、見た目の縮尺比を
+     一致させる (でないと画面表示だけ余白が薄い/濃いといったズレが生じる)。 */
+  const MARGIN_RATIO = 0.12;
 
   /* 指定幅に収まるよう末尾を "…" で省略する */
   function truncateToWidth(context, text, maxWidth) {
@@ -640,27 +642,74 @@
     if (results.length === 1 && results[0].type === "linear") {
       const r = results[0];
       const showText = state.barcode.showText;
+      const showCaption = effectivePlacement() === "each";
       const totalW = r.quietLeft + r.width + r.quietRight;
-      const scale = Math.max(1, Math.floor(availW / totalW));
+      const outerColor = state.outerSame ? state.bg : state.outerBg;
+      const fontPxBase = Math.round(12 * dpr);
+      const fontPxMin = Math.round(8 * dpr);
+
+      /* QR 系と同じ正方形の表示域に、余白 (MARGIN_RATIO) を確保した上で
+         バーコードを中央揃えで配置する (規格によって配置ロジックが違うと
+         見た目の余白比率がバラバラになるため、他規格と統一する)。 */
+      const squareSize = Math.max(40, Math.min(availW, availH));
+      const budget = Math.max(20, squareSize * (1 - MARGIN_RATIO * 2));
+
+      const scale = Math.max(1, Math.floor(budget / totalW));
       const textH = showText ? Math.round(16 * scale) : 0;
-      const barH = Math.max(30 * dpr, Math.min(availH - 8 * dpr - textH, Math.round(totalW * scale * 0.3)));
-      canvas.width = totalW * scale;
-      canvas.height = barH + 16 * scale + textH;
+      const barH = Math.max(30 * dpr, Math.min(budget - 16 * dpr - textH, Math.round(totalW * scale * 0.3)));
+      const contentW = totalW * scale;
+      const contentH = barH + 16 * scale + textH;
+
+      let lines = [], captionFontPx = fontPxBase, captionH = 0;
+      if (showCaption) {
+        const maxW = Math.max(20, contentW - 8 * dpr);
+        const fit = fitCaptionLines(ctx, perCodeContentText(0), maxW, 3, fontPxBase, fontPxMin);
+        captionFontPx = fit.fontPx;
+        lines = fit.lines;
+        const lineH = Math.round(captionFontPx * 1.4);
+        captionH = lines.length * lineH + Math.round(6 * dpr);
+      }
+      const blockH = contentH + captionH;
+
+      canvas.width = squareSize;
+      canvas.height = squareSize;
       canvas.style.width = `${canvas.width / dpr}px`;
       canvas.style.height = `${canvas.height / dpr}px`;
-      ctx.fillStyle = state.bg;
+      ctx.fillStyle = outerColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      /* 半端な小数ピクセルで矩形を描くと、隣接するバー同士の境界がアンチ
+         エイリアスされ、灰色の筋が入ってしまう。整数ピクセルに丸める。 */
+      const originX = Math.max(0, Math.round((squareSize - contentW) / 2));
+      const originY = Math.max(0, Math.round((squareSize - blockH) / 2));
+      ctx.fillStyle = state.bg;
+      ctx.fillRect(originX, originY, contentW, contentH);
       ctx.fillStyle = state.fg;
       for (let x = 0; x < r.width; x++) {
         if (r.pattern[x]) {
-          ctx.fillRect((r.quietLeft + x) * scale, 8 * scale, scale, barH);
+          ctx.fillRect(originX + (r.quietLeft + x) * scale, originY + 8 * scale, scale, barH);
         }
       }
       if (showText) {
         ctx.font = `${Math.round(12 * scale)}px monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(r.display, canvas.width / 2, barH + 8 * scale + 2 * scale, totalW * scale);
+        ctx.fillText(r.display, originX + contentW / 2, originY + barH + 8 * scale + 2 * scale, contentW);
+      }
+      if (showCaption) {
+        ctx.font = `${captionFontPx}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const maxW = canvas.width - 8 * dpr;
+        const lineH = Math.round(captionFontPx * 1.4);
+        const textBlockH = lines.length * lineH;
+        /* コード (+表示文字) 下端から表示域 (正方形) 下端までの帯の縦中央に
+           内容表示の文字ブロックが来るようにする */
+        const contentBottom = originY + contentH;
+        const bandH = canvas.height - contentBottom;
+        const startY = contentBottom + (bandH - textBlockH) / 2;
+        lines.forEach((line, i) => {
+          ctx.fillText(line, canvas.width / 2, startY + i * lineH, maxW);
+        });
       }
       lastDraw = null;
       return;
@@ -676,10 +725,22 @@
       const fontPxBase = Math.round(12 * dpr);
       const fontPxMin = Math.round(8 * dpr);
 
+      /* キャンバス自体を QR 表示域 (.qr-card) と同じ正方形にする。以前はキャンバスを
+         コード+キャプションぶんだけタイトなサイズにし、CSS の flex 中央寄せで正方形内に
+         配置していたため、キャプション下の本当の余白量が JS から見えず、「クワイエット
+         ゾーン下端〜表示域下端の中間」を正しく計算できなかった。
+         さらに、コードをここまで viewport いっぱいに拡大していたため余白がほぼ 0 になり、
+         「背景を含む」書き出し (常に一定割合の余白を確保する) と見た目の縮尺比が
+         食い違っていた (画面表示は余白が薄く、書き出しは厚い)。書き出しと同じ
+         MARGIN_RATIO を使い、コード+キャプションが正方形の中央に一定の余白を
+         残して収まるようにすることで、両者の見た目を一致させる。 */
+      const squareSize = Math.max(40, Math.min(availW, availH));
+      const budget = Math.max(20, squareSize * (1 - MARGIN_RATIO * 2));
+
       /* キャプション幅は最終的なコード幅 (mw*scale) に依存し、その幅は
          キャプションの高さにも依存するため、収束するまで数回計算し直す。
          行数上限に収まらない場合は、収まるまでフォントを縮小する。 */
-      let scale = Math.max(1, Math.floor(Math.min(availW / mw, availH / mh)));
+      let scale = Math.max(1, Math.floor(Math.min(budget / mw, budget / mh)));
       let lines = [];
       let captionFontPx = fontPxBase;
       let captionH = 0;
@@ -691,17 +752,12 @@
           lines = fit.lines;
           const lineH = Math.round(captionFontPx * 1.4);
           const newCaptionH = lines.length * lineH + Math.round(6 * dpr);
-          const newScale = Math.max(1, Math.floor(Math.min(availW / mw, (availH - newCaptionH) / mh)));
+          const newScale = Math.max(1, Math.floor(Math.min(budget / mw, (budget - newCaptionH) / mh)));
           captionH = newCaptionH;
           if (newScale === scale) break;
           scale = newScale;
         }
       }
-      /* キャンバス自体を QR 表示域 (.qr-card) と同じ正方形にする。以前はキャンバスを
-         コード+キャプションぶんだけタイトなサイズにし、CSS の flex 中央寄せで正方形内に
-         配置していたため、キャプション下の本当の余白量が JS から見えず、「クワイエット
-         ゾーン下端〜表示域下端の中間」を正しく計算できなかった。 */
-      const squareSize = Math.max(40, Math.min(availW, availH));
       canvas.width = squareSize;
       canvas.height = squareSize;
       canvas.style.width = `${canvas.width / dpr}px`;
@@ -750,7 +806,9 @@
       return;
     }
 
-    /* 複数コード: QR 表示域の大きさは変えず、グリッドに縮小配置する。編集は非対応。 */
+    /* 複数コード: QR 表示域の大きさは変えず、グリッドに縮小配置する。編集は非対応。
+       単一コードの場合と同じ MARGIN_RATIO ぶんを四辺の余白として確保し、
+       「背景を含む」書き出しと見た目の縮尺比を一致させる。 */
     const n = results.length;
     const placement = effectivePlacement();
     const showCaptions = placement === "each" || placement === "both";
@@ -758,10 +816,13 @@
     const { cols, rows } = gridDims(n);
     const gap = GRID_GAP * dpr;
     const outerColor = state.outerSame ? state.bg : state.outerBg;
+    const squareSizeMulti = Math.max(40, Math.min(availW, availH));
+    const budgetW = Math.max(20, squareSizeMulti * (1 - MARGIN_RATIO * 2));
+    const budgetH = budgetW;
 
     const cellFontPxBase = Math.round(10 * dpr);
     const cellFontPxMin = Math.round(7 * dpr);
-    const cellWEstimate = (availW - gap * (cols - 1)) / cols;
+    const cellWEstimate = (budgetW - gap * (cols - 1)) / cols;
     /* 全コードのキャプションが2行に収まる、共通で使える最大フォントサイズを探す */
     let cellFontPx = cellFontPxBase;
     let cellLines = [];
@@ -787,23 +848,29 @@
     const combinedFontPxMin = Math.round(7 * dpr);
     const combinedRaw = combinedContentText();
     const combinedFit = showCombined
-      ? fitCaptionLines(ctx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, availW - 8 * dpr, 2, combinedFontPxBase, combinedFontPxMin)
+      ? fitCaptionLines(ctx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, budgetW - 8 * dpr, 2, combinedFontPxBase, combinedFontPxMin)
       : { fontPx: combinedFontPxBase, lines: [] };
     const combinedFontPx = combinedFit.fontPx;
     const combinedLines = combinedFit.lines;
     const combinedLineH = Math.round(combinedFontPx * 1.4);
     const combinedH = showCombined ? combinedLines.length * combinedLineH + Math.round(6 * dpr) : 0;
 
-    const gridAvailH = availH - combinedH;
-    const cellW = (availW - gap * (cols - 1)) / cols;
+    const gridAvailH = budgetH - combinedH;
+    const cellW = (budgetW - gap * (cols - 1)) / cols;
     const cellH = (gridAvailH - gap * (rows - 1)) / rows - captionH;
     const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
     let scale = Infinity;
     for (const { mw, mh } of dims) scale = Math.min(scale, Math.floor(Math.min(cellW / mw, cellH / mh)));
     scale = Math.max(1, scale);
 
-    canvas.width = Math.round(availW);
-    canvas.height = Math.round(availH);
+    /* グリッド全体 (+結合キャプション) のブロックを正方形の中央に配置する */
+    const gridBlockW = cols * cellW + (cols - 1) * gap;
+    const gridBlockH = gridAvailH + combinedH;
+    const gridOriginX = Math.max(0, Math.round((squareSizeMulti - gridBlockW) / 2));
+    const gridOriginY = Math.max(0, Math.round((squareSizeMulti - gridBlockH) / 2));
+
+    canvas.width = squareSizeMulti;
+    canvas.height = squareSizeMulti;
     canvas.style.width = `${canvas.width / dpr}px`;
     canvas.style.height = `${canvas.height / dpr}px`;
     /* 背景色 (外側) を全体に敷き、各コードのクワイエットゾーン込みの面だけ塗る。
@@ -815,8 +882,8 @@
       const r = results[i];
       const { mw, mh } = dims[i];
       const col = i % cols, row = Math.floor(i / cols);
-      const cellX = col * (cellW + gap);
-      const cellY = row * (cellH + captionH + gap);
+      const cellX = gridOriginX + col * (cellW + gap);
+      const cellY = gridOriginY + row * (cellH + captionH + gap);
       /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
          エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
       const offX = Math.round(cellX + (cellW - mw * scale) / 2);
@@ -852,9 +919,13 @@
       ctx.font = `${combinedFontPx}px monospace`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      const maxW = availW - 8 * dpr;
+      const maxW = budgetW - 8 * dpr;
       const blockH = combinedLines.length * combinedLineH;
-      const startY = gridAvailH + (availH - gridAvailH - blockH) / 2;
+      /* グリッド下端から表示域 (正方形キャンバス) 下端までの帯の縦中央に
+         文字ブロックが来るようにする */
+      const gridBottom = gridOriginY + gridAvailH;
+      const bandH = canvas.height - gridBottom;
+      const startY = gridBottom + (bandH - blockH) / 2;
       combinedLines.forEach((line, li) => {
         ctx.fillText(line, canvas.width / 2, startY + li * combinedLineH, maxW);
       });
@@ -1169,7 +1240,9 @@
     const results = current.results;
     const off = document.createElement("canvas");
     const octx = off.getContext("2d");
-    if (results.length === 1 && results[0].type === "linear") {
+    if (results.length === 1 && results[0].type === "linear" && state.saveScope === "full") {
+      renderFullLinearCanvas(off, octx);
+    } else if (results.length === 1 && results[0].type === "linear") {
       const r = results[0];
       const showText = state.barcode.showText;
       const scale = 4;
@@ -1238,6 +1311,69 @@
     return off;
   }
 
+  /* 1次元バーコードを、背景色と内容表示テキストまで含めて書き出す
+     (renderPngCanvas の「背景を含む」モード用)。他規格と同じく正方形に
+     余白 (MARGIN_RATIO) を確保した上で中央揃えにする。 */
+  function renderFullLinearCanvas(off, octx) {
+    const r = current.results[0];
+    const showText = state.barcode.showText;
+    const showCaption = effectivePlacement() === "each";
+    const outerColor = state.outerSame ? state.bg : state.outerBg;
+    const totalW = r.quietLeft + r.width + r.quietRight;
+    const scale = 4;
+    const fontPxBase = Math.max(14, Math.round(scale * 2.2));
+    const fontPxMin = Math.max(8, Math.round(scale));
+
+    const barH = Math.max(120, Math.round(totalW * scale * 0.3));
+    const textH = showText ? 48 : 0;
+    const contentW = totalW * scale;
+    const contentH = barH + 40 + textH;
+
+    let lines = [], captionFontPx = fontPxBase, captionH = 0;
+    if (showCaption) {
+      const maxW = Math.max(20, contentW - 16);
+      const fit = fitCaptionLines(octx, perCodeContentText(0), maxW, 3, fontPxBase, fontPxMin);
+      captionFontPx = fit.fontPx;
+      lines = fit.lines;
+      const lineH = Math.round(captionFontPx * 1.4);
+      captionH = lines.length * lineH + 12;
+    }
+    const blockH = contentH + captionH;
+    const margin = Math.round(Math.max(contentW, blockH) * MARGIN_RATIO);
+    const square = Math.max(contentW, blockH) + margin * 2;
+    off.width = square;
+    off.height = square;
+    const originX = Math.round((square - contentW) / 2);
+    const originY = Math.round((square - blockH) / 2);
+
+    octx.fillStyle = outerColor;
+    octx.fillRect(0, 0, off.width, off.height);
+    octx.fillStyle = state.bg;
+    octx.fillRect(originX, originY, contentW, contentH);
+    octx.fillStyle = state.fg;
+    for (let x = 0; x < r.width; x++) {
+      if (r.pattern[x]) octx.fillRect(originX + (r.quietLeft + x) * scale, originY + 20, scale, barH);
+    }
+    if (showText) {
+      octx.font = "36px monospace";
+      octx.textAlign = "center";
+      octx.textBaseline = "top";
+      octx.fillText(r.display, originX + contentW / 2, originY + barH + 24, contentW);
+    }
+    if (showCaption) {
+      octx.font = `${captionFontPx}px monospace`;
+      octx.textAlign = "center";
+      octx.textBaseline = "top";
+      const lineH = Math.round(captionFontPx * 1.4);
+      const maxW = off.width - 16;
+      const textBlockH = lines.length * lineH;
+      const contentBottom = originY + contentH;
+      const bandH = off.height - contentBottom;
+      const startY = contentBottom + (bandH - textBlockH) / 2;
+      lines.forEach((line, i) => octx.fillText(line, off.width / 2, startY + i * lineH, maxW));
+    }
+  }
+
   /* 単一コードを、背景色 (クワイエットゾーンの外側) と内容表示テキストまで含めて
      書き出す (renderPngCanvas の「背景を含む」モード用)。オンスクリーン描画の
      drawCurrent() と同じ構図を、保存用の高解像度スケールで再現する。 */
@@ -1266,7 +1402,7 @@
        しまう (実際に発生していた不具合)。そこで常に一定の余白 (margin) を
        四辺に確保した上で正方形化する。 */
     const contentW = mw * scale, contentH = mh * scale + captionH;
-    const margin = Math.round(Math.max(contentW, contentH) * 0.12);
+    const margin = Math.round(Math.max(contentW, contentH) * MARGIN_RATIO);
     const square = Math.max(contentW, contentH) + margin * 2;
     off.width = square;
     off.height = square;
@@ -1355,7 +1491,7 @@
        配置される。書き出しもそれをそのまま再現する。常に一定の余白 (margin) を
        四辺に確保した上で正方形化する (単一コードの場合と同じ理由)。 */
     const contentW = totalGridW, contentH = gridH + combinedH;
-    const margin = Math.round(Math.max(contentW, contentH) * 0.12);
+    const margin = Math.round(Math.max(contentW, contentH) * MARGIN_RATIO);
     const square = Math.max(contentW, contentH) + margin * 2;
     off.width = square;
     off.height = square;
@@ -1457,7 +1593,7 @@
       const totalW = r.quietLeft + r.width + r.quietRight;
       const barH = Math.max(30, Math.round(totalW * 0.3));
       const textH = showText ? 14 : 0;
-      const totalH = barH + 10 + textH;
+      const contentH = barH + 10 + textH;
       let rects = "";
       let x = 0;
       while (x < r.width) {
@@ -1472,9 +1608,42 @@
         ? `<text x="${totalW / 2}" y="${barH + 8 + textH}" font-family="monospace" ` +
           `font-size="${textH}" text-anchor="middle">${escapeXml(r.display)}</text>`
         : "";
-      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" ` +
-        `width="${totalW * 4}" height="${totalH * 4}" shape-rendering="crispEdges">` +
-        `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}${text}</g></svg>`;
+      if (state.saveScope === "full") {
+        const outerColor = state.outerSame ? state.bg : state.outerBg;
+        const showCaption = effectivePlacement() === "each";
+        let captionH = 0, captionLines = [], fontSize = 0, lineH = 0;
+        if (showCaption) {
+          fontSize = Math.max(3, Math.round(totalW * 0.045));
+          captionLines = wrapMonospace(perCodeContentText(0), fontSize, totalW - fontSize, 3);
+          lineH = fontSize * 1.4;
+          captionH = captionLines.length * lineH + fontSize * 0.6;
+        }
+        const blockH = contentH + captionH;
+        const margin = Math.round(Math.max(totalW, blockH) * MARGIN_RATIO);
+        const square = Math.max(totalW, blockH) + margin * 2;
+        const originX = Math.round((square - totalW) / 2);
+        const originY = Math.round((square - blockH) / 2);
+        let captionSvg = "";
+        if (showCaption) {
+          const blockTextH = captionLines.length * lineH;
+          const contentBottom = contentH;
+          const bandH = (square - originY) - contentBottom;
+          const startTop = contentBottom + (bandH - blockTextH) / 2;
+          captionSvg = `<g font-family="monospace" font-size="${fontSize}" text-anchor="middle" fill="${state.fg}">` +
+            captionLines.map((line, i) => `<text x="${totalW / 2}" y="${startTop + i * lineH + fontSize}">${escapeXml(line)}</text>`).join("") +
+            `</g>`;
+        }
+        svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${square} ${square}" ` +
+          `width="${square * 4}" height="${square * 4}" shape-rendering="crispEdges">` +
+          `<rect width="100%" height="100%" fill="${outerColor}"/>` +
+          `<g transform="translate(${originX} ${originY})">` +
+          `<rect x="0" y="0" width="${totalW}" height="${contentH}" fill="${state.bg}"/>` +
+          `<g fill="${state.fg}">${rects}${text}</g>${captionSvg}</g></svg>`;
+      } else {
+        svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${contentH}" ` +
+          `width="${totalW * 4}" height="${contentH * 4}" shape-rendering="crispEdges">` +
+          `<rect width="100%" height="100%" fill="${state.bg}"/><g fill="${state.fg}">${rects}${text}</g></svg>`;
+      }
     } else if (results.length === 1) {
       const r = results[0];
       const qz = r.quietZone;
@@ -1506,7 +1675,7 @@
            その中央に配置される。書き出しもそれをそのまま再現する。常に一定の
            余白 (margin) を四辺に確保した上で正方形化する。 */
         const contentH = mh + captionH;
-        const margin = Math.round(Math.max(mw, contentH) * 0.12);
+        const margin = Math.round(Math.max(mw, contentH) * MARGIN_RATIO);
         const square = Math.max(mw, contentH) + margin * 2;
         const originX = (square - mw) / 2;
         const originY = (square - contentH) / 2;
@@ -1562,7 +1731,7 @@
       /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、グリッド全体はその中央に
          配置される。書き出しもそれをそのまま再現する。常に一定の余白 (margin) を
          四辺に確保した上で正方形化する。 */
-      const margin = Math.round(Math.max(totalW, totalH) * 0.12);
+      const margin = Math.round(Math.max(totalW, totalH) * MARGIN_RATIO);
       const square = Math.max(totalW, totalH) + margin * 2;
       const originX = (square - totalW) / 2;
       const originY = (square - totalH) / 2;
