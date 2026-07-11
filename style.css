@@ -217,8 +217,8 @@ body {
 /* 折りたたみボタン自体は横並びの片側 (flex:1) の幅しかないため、展開時は
    中身 (アイコン・説明つきのリッチカード等) が崩れないよう約2倍の幅を確保する。
    はみ出す側は互いに逆方向へ広げ、画面端からあふれないようにする */
-#standard-combo .quick-combo-panel { left: 0; width: 200%; }
-#decode-combo .quick-combo-panel { right: 0; width: 200%; }
+#standard-combo .quick-combo-panel { left: 0; width: 150%; }
+#decode-combo .quick-combo-panel { right: 0; width: 300%; }
 .quick-combo-option {
   border: none;
   background: var(--surface);
@@ -845,7 +845,7 @@ textarea:focus, select:focus, input:focus-visible,
   html, body { height: auto; min-height: 100dvh; overflow-y: auto; }
 
   /* タイトル横のロゴはモバイルでは横幅節約のため非表示にする */
-  .site-title-icon { display: none; }
+  /* .site-title-icon { display: none; } */
 
   /* 規格選択・デコードのプルダウンボタンにはニューモーフィズムの浮き出し影をつけ、
      開いたときに出るモーダル (.quick-combo-panel) 側は影なしにする */
@@ -885,8 +885,8 @@ textarea:focus, select:focus, input:focus-visible,
   .mobile-quick-select { display: flex; flex: 1; gap: 6px; }
   /* 「読取り」は「規格」に比べて選ぶ機会が少ないため、横幅を従来の6割程度
      (2分割時の50%→30%) に短くし、その分「規格」を広げて見やすくする */
-  #standard-combo { flex: 7; }
-  #decode-combo { flex: 5; }
+  #standard-combo { flex: 2; }
+  #decode-combo { flex: 1; }
   #mobile-scan-status-slot:not(:empty) { margin-top: 4px; }
   .reset-all-label {
     position: absolute;
