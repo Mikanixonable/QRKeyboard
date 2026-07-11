@@ -5,7 +5,9 @@
 :root {
   /* ニューモーフィズム: メイン=灰色、サブ=白、アクセント=オレンジ。
      カード類は背景と同色にし、二方向シャドウ (--shadow-light/--shadow-dark)
-     の陰影だけで凹凸を表現する (--neu-* 参照)。 */
+     の陰影だけで凹凸を表現する (--neu-* 参照)。ライト/ダークは [data-theme]
+     属性で手動切り替え (#theme-toggle-btn、app.js 側で localStorage に保存)。
+     属性が無い場合は端末の prefers-color-scheme に従う。 */
   --bg: #e7eaee;
   --surface: #e7eaee;
   --surface-white: #ffffff;  /* サブカラー: 押し込み面 (入力欄・凹面) の下地 */
@@ -28,23 +30,24 @@
   --neu-inset-sm: inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #2b2e33;
-    --surface: #2b2e33;
-    --surface-white: #383c43;
-    --text: #eceef0;
-    --text-sub: #9aa0a8;
-    --border: #40454c;
-    --accent: #f2954f;
-    --accent-weak: #47331f;
-    --accent2: #e08a3c;
-    --accent2-weak: #3c2b18;
-    --accent3: #d9731f;
-    --accent3-weak: #362413;
-    --danger: #e57368;
-    --shadow-dark: #1d1f22;
-    --shadow-light: #383c43;
-  }
+  :root:not([data-theme="light"]) { --bg: #2b2e33; --surface: #2b2e33; --surface-white: #383c43; --text: #eceef0; --text-sub: #9aa0a8; --border: #40454c; --accent: #f2954f; --accent-weak: #47331f; --accent2: #e08a3c; --accent2-weak: #3c2b18; --accent3: #d9731f; --accent3-weak: #362413; --danger: #e57368; --shadow-dark: #1d1f22; --shadow-light: #383c43; }
+}
+:root[data-theme="dark"] {
+  --bg: #2b2e33;
+  --surface: #2b2e33;
+  --surface-white: #383c43;
+  --text: #eceef0;
+  --text-sub: #9aa0a8;
+  --border: #40454c;
+  --accent: #f2954f;
+  --accent-weak: #47331f;
+  --accent2: #e08a3c;
+  --accent2-weak: #3c2b18;
+  --accent3: #d9731f;
+  --accent3-weak: #362413;
+  --danger: #e57368;
+  --shadow-dark: #1d1f22;
+  --shadow-light: #383c43;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -551,8 +554,8 @@ textarea:focus, select:focus, input:focus-visible,
 .decode-group .small-button { width: 100%; }
 /* デスクトップではラベル付きのボタンとして表示し、アイコンは隠す。
    モバイルではタイトル右のミニ丸ボタン (アイコンのみ) に切り替える (下の @media 参照) */
-#reset-all-btn { width: 100%; }
-.reset-all-icon { display: none; }
+#reset-all-btn, #theme-toggle-btn { width: 100%; }
+.reset-all-icon, .theme-toggle-icon { display: none; }
 .scan-status {
   font-size: 11px;
   color: var(--text-sub);
@@ -709,7 +712,7 @@ textarea:focus, select:focus, input:focus-visible,
   #mobile-scan-status-slot:not(:empty) { margin-top: 4px; }
   /* 「条件をリセット」ボタンをタイトル右にアイコンのみのミニボタンとして配置し、
      縦幅を節約する (ラベルは視覚的に隠すが、スクリーンリーダー向けには残す) */
-  #reset-all-btn {
+  #reset-all-btn, #theme-toggle-btn {
     width: 28px;
     height: 28px;
     flex: none;
@@ -719,7 +722,7 @@ textarea:focus, select:focus, input:focus-visible,
     align-items: center;
     justify-content: center;
   }
-  .reset-all-icon { display: inline; font-size: 15px; line-height: 1; }
+  .reset-all-icon, .theme-toggle-icon { display: inline; font-size: 15px; line-height: 1; }
   .reset-all-label {
     position: absolute;
     width: 1px;

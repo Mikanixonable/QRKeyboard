@@ -2403,6 +2403,31 @@
     location.href = location.pathname;
   });
 
+  /* ライト/ダークテーマ切り替え: 未選択時は端末の prefers-color-scheme に従う
+     (CSS 側の @media フォールバック)。一度切り替えたら localStorage に保存し
+     次回アクセス時も維持する。 */
+  const THEME_KEY = "qrkeyboard-theme";
+  const themeToggleIcon = document.querySelector("#theme-toggle-btn .theme-toggle-icon");
+  function currentTheme() {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function applyTheme(theme) {
+    if (localStorage.getItem(THEME_KEY)) {
+      document.documentElement.setAttribute("data-theme", theme);
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    themeToggleIcon.textContent = theme === "dark" ? "☀" : "🌙";
+  }
+  applyTheme(currentTheme());
+  $("theme-toggle-btn").addEventListener("click", () => {
+    const next = currentTheme() === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
   /* モバイル用の折りたたみメニュー (規格選択・デコード) の開閉制御 */
   function closeQuickCombos() {
     for (const combo of document.querySelectorAll(".quick-combo")) {
