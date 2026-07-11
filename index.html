@@ -37,10 +37,6 @@
           <span class="theme-toggle-icon" aria-hidden="true">🌙</span>
           <span class="reset-all-label">テーマ切り替え</span>
         </button>
-        <button type="button" class="small-button" id="reset-all-btn" title="条件をリセット">
-          <span class="reset-all-icon" aria-hidden="true">↺</span>
-          <span class="reset-all-label">リセット</span>
-        </button>
         <div class="mobile-quick-select">
           <div class="quick-combo" id="standard-combo">
             <button type="button" class="quick-combo-btn" id="standard-combo-btn" aria-haspopup="listbox"
@@ -56,14 +52,14 @@
             <button type="button" class="quick-combo-btn" id="decode-combo-btn" aria-haspopup="listbox"
               aria-expanded="false">
               <span class="quick-combo-current">
-                <strong>デコード</strong>
+                <strong>読取り</strong>
                 <small>カメラ / 画像から読み取り</small>
               </span>
               <svg class="quick-combo-caret" viewBox="0 0 10 6" aria-hidden="true">
                 <path d="M0 0h10L5 6z" />
               </svg>
             </button>
-            <div class="quick-combo-panel" id="decode-combo-panel" role="listbox" aria-label="デコード" hidden>
+            <div class="quick-combo-panel" id="decode-combo-panel" role="listbox" aria-label="読取り" hidden>
               <button type="button" class="quick-combo-option" id="decode-combo-camera">📷 カメラで読み取り</button>
               <button type="button" class="quick-combo-option" id="decode-combo-image">🖼 画像を選択</button>
               <p class="quick-combo-note">デコード対応: QR, Micro QR, rMQR, Data Matrix, Aztec Code</p>
@@ -74,7 +70,11 @@
         </div>
       </div>
       <div id="mobile-scan-status-slot"></div>
-      <div class="tabs-vertical" role="tablist" aria-label="コード規格">
+      <div class="left-mode-toggle" role="tablist" aria-label="表示切替">
+        <button type="button" class="left-mode-btn" data-mode="encode" aria-selected="true">エンコード</button>
+        <button type="button" class="left-mode-btn" data-mode="decode" aria-selected="false">読取り</button>
+      </div>
+      <div class="tabs-vertical" id="encode-panel" role="tablist" aria-label="コード規格">
         <div class="tab-category" data-category="2d">
           <div class="tab-category-label">二次元コード</div>
           <div class="tab-group tab-group-qr" aria-label="QRコード系">
@@ -344,17 +344,17 @@
           </div>
         </div>
 
-        <div class="tab-category" data-category="decode">
-          <div class="tab-category-label">デコード</div>
-          <div class="decode-group">
-            <button type="button" class="small-button" id="scan-camera-btn">📷 カメラで読み取り</button>
-            <button type="button" class="small-button" id="scan-image-btn">🖼 画像を選択</button>
-            <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
-            <input type="file" id="scan-file-input" accept="image/*" hidden>
-            <span class="scan-status" id="scan-status"></span>
-            <span class="scan-note">※ MicroQR・rMQRは自前の検出処理で読み取ります(正面に近い角度で撮影/取り込みしてください)</span>
-            <span class="scan-note">※ GS1 DataBar-14 は生成はできますが、読み取りライブラリ側の非互換により読み取れません</span>
-          </div>
+      </div>
+
+      <div class="decode-panel" id="decode-panel" hidden>
+        <div class="decode-group">
+          <button type="button" class="small-button" id="scan-camera-btn">📷 カメラで読み取り</button>
+          <button type="button" class="small-button" id="scan-image-btn">🖼 画像を選択</button>
+          <button type="button" class="small-button" id="scan-stop-btn" hidden>✕ 読み取り終了</button>
+          <input type="file" id="scan-file-input" accept="image/*" hidden>
+          <span class="scan-status" id="scan-status"></span>
+          <span class="scan-note">※ MicroQR・rMQRは自前の検出処理で読み取ります(正面に近い角度で撮影/取り込みしてください)</span>
+          <span class="scan-note">※ GS1 DataBar-14 は生成はできますが、読み取りライブラリ側の非互換により読み取れません</span>
         </div>
       </div>
     </nav>
@@ -378,6 +378,7 @@
           <button type="button" class="small-button" id="save-png">PNG</button>
           <button type="button" class="small-button" id="save-svg">SVG</button>
           <button type="button" class="small-button" id="copy-png">コピー</button>
+          <button type="button" class="small-button" id="share-link-btn">リンクをシェア</button>
         </div>
       </div>
 
@@ -403,11 +404,11 @@
               <span>クワイエットゾーン</span>
             </label>
             <label class="color-item">
-              <input type="color" id="color-outer" value="#e5e7eb">
+              <input type="color" id="color-outer" value="#e5e7eb" disabled>
               <span>背景</span>
             </label>
             <label class="color-item">
-              <input type="checkbox" id="color-outer-same">
+              <input type="checkbox" id="color-outer-same" checked>
               <span>同じ色にする</span>
             </label>
             <button type="button" class="small-button" id="color-reset">白黒に戻す</button>
@@ -480,6 +481,7 @@
   <script src="barcode1d.js"></script>
   <script src="pdf417.js"></script>
   <script src="decode-finder.js"></script>
+  <script src="decode-1d.js"></script>
   <script src="app.js"></script>
 </body>
 

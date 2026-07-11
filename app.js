@@ -43,7 +43,7 @@
     fg: "#000000",
     bg: "#ffffff",
     outerBg: "#e5e7eb",
-    outerSame: false,
+    outerSame: true,
     splitMode: "simple", // "simple" | "structured" (QR の Structured Append)
     showContent: false,
     contentPlacement: "combined", // "each" | "combined" | "both" (複数コード表示時のみ有効)
@@ -110,11 +110,14 @@
       return;
     }
     if (std === "pdf417") {
-      box.appendChild(makeSegButton("自動", st.ecAuto, () => {
+      /* 「自動」を全幅の1段目にし、数字の選択肢はその下に並べる */
+      const autoBtn = makeSegButton("自動", st.ecAuto, () => {
         st.ecAuto = true;
         rebuildControls();
         render();
-      }));
+      });
+      autoBtn.classList.add("seg-btn-full");
+      box.appendChild(autoBtn);
       for (let level = 0; level <= 8; level++) {
         box.appendChild(makeSegButton(String(level), !st.ecAuto && st.ec === level, () => {
           st.ecAuto = false;
@@ -126,6 +129,7 @@
       return;
     }
     if (std === "aztec") {
+      box.classList.add("segmented-vertical");
       [["10%", 0], ["23%", 1], ["36%", 2], ["50%", 3]].forEach(([label, idx]) => {
         box.appendChild(makeSegButton(label, st.ec === idx, () => {
           st.ec = idx;
@@ -137,11 +141,11 @@
     }
     if (std === "barcode") return;
 
-    if (std === "qr") box.classList.add("segmented-vertical");
+    if (std === "qr") box.classList.add("segmented-vertical", "ec-control-qr");
 
     const options = {
       qr: [["L (7%)", "L"], ["M (15%)", "M"], ["Q (25%)", "Q"], ["H (30%)", "H"]],
-      micro: [["L", "L"], ["M", "M"], ["Q", "Q"]],
+      micro: [["L (7%)", "L"], ["M (15%)", "M"], ["Q (25%)", "Q"]],
       rmqr: [["M (15%)", "M"], ["H (30%)", "H"]],
     }[std];
     const available = std === "micro" ? microEcAvailable(st) : null;
@@ -210,6 +214,49 @@
     return "tile-fits-" + Math.min(count, 5) + (count >= 5 ? "plus" : "");
   }
 
+  /* versionCodeCount は型番ごとに実際にエンコードを試すため、型番数の多い規格
+     (QRの40件など) では入力の度に毎回計算すると非常に重くなる。そこで、直前の
+     結果をキャッシュして即座に返しつつ、入力内容(および誤り訂正レベル等)が
+     変わっていた場合のみ、入力が一段落してから(デバウンス)まとめて再計算する。 */
+  const versionCountCache = {}; // { [std]: { key, counts: Map<version, count> } }
+  let versionCountTimer = null;
+  let pendingVersionCountRequest = null; // { std, key, versions: Set }
+
+  function versionCountCacheKey(std) {
+    const st = state[std];
+    return dataInput.value + "|" + (st.ec != null ? st.ec : "") + "|" + (st.ecAuto ? "1" : "0");
+  }
+
+  function scheduleVersionCountRecompute() {
+    if (versionCountTimer) clearTimeout(versionCountTimer);
+    versionCountTimer = setTimeout(() => {
+      versionCountTimer = null;
+      const req = pendingVersionCountRequest;
+      pendingVersionCountRequest = null;
+      if (!req || req.std !== state.standard || req.key !== versionCountCacheKey(req.std)) return;
+      const counts = new Map();
+      req.versions.forEach((v) => counts.set(v, versionCodeCount(req.std, v)));
+      versionCountCache[req.std] = { key: req.key, counts };
+      buildVersionControl();
+    }, 250);
+  }
+
+  /* 型番タイルの色付け用に fitsCount を取得する。キャッシュが今の入力内容と
+     一致していればそれを即座に返す。一致しない場合は (古い値があればそれを
+     暫定表示に使いつつ) 再計算をデバウンス予約する。 */
+  function fitsCountCached(std, version) {
+    const key = versionCountCacheKey(std);
+    const cache = versionCountCache[std];
+    if (!cache || cache.key !== key) {
+      if (!pendingVersionCountRequest || pendingVersionCountRequest.std !== std || pendingVersionCountRequest.key !== key) {
+        pendingVersionCountRequest = { std, key, versions: new Set() };
+      }
+      pendingVersionCountRequest.versions.add(version);
+      scheduleVersionCountRecompute();
+    }
+    return cache ? cache.counts.get(version) : undefined;
+  }
+
   /* ---------- 複雑度(型番)コントロール ---------- */
 
   function buildVersionControl() {
@@ -223,21 +270,48 @@
     label.textContent = std === "barcode" ? "種類" : std === "pdf417" ? "列数" : "型番(複雑度)";
 
     if (std === "barcode") {
-      const seg = document.createElement("div");
-      seg.className = "segmented segmented-vertical";
-      [
-        ["JAN / EAN-13", "ean13"], ["Code 128", "code128"], ["Code 39", "code39"],
-        ["GS1 DataBar-14", "gs1databar"], ["UPC-A", "upca"], ["Code 93", "code93"],
-        ["ITF", "itf"], ["ITF-14", "itf14"], ["Industrial 2 of 5", "industrial2of5"],
-        ["Pharmacode", "pharmacode"],
-      ].forEach(([name, sym]) => {
-        seg.appendChild(makeSegButton(name, st.symbology === sym, () => {
-          st.symbology = sym;
-          rebuildControls();
-          render();
-        }));
+      /* 規格数が多く初心者には選びづらいため、よく使われる規格とそれ以外を
+         見出しで分け、各ボタンに title (ツールチップ) で簡単な説明を添える */
+      const BARCODE_GROUPS = [
+        {
+          label: "よく使われる規格",
+          items: [
+            ["JAN / EAN-13", "ean13", "書籍・食品など小売商品の値札で最も一般的な規格"],
+            ["Code 128", "code128", "英数字・記号を扱える汎用規格。物流・工業用途で広く使用"],
+            ["Code 39", "code39", "英数字を扱えるシンプルな規格。工業・タグ用途で使用"],
+            ["UPC-A", "upca", "北米の小売商品で使われる規格 (JAN/EANの近縁)"],
+            ["ITF-14", "itf14", "段ボールなど梱包・物流用の数字14桁規格"],
+          ],
+        },
+        {
+          label: "その他の規格",
+          items: [
+            ["GS1 DataBar-14", "gs1databar", "小型商品にも印字できるJAN/EAN代替規格"],
+            ["Code 93", "code93", "Code 39の高密度版。より短く印字できる"],
+            ["ITF", "itf", "偶数桁の数字を扱う物流用規格"],
+            ["Industrial 2 of 5", "industrial2of5", "数字のみを扱うシンプルな工業用規格"],
+            ["Pharmacode", "pharmacode", "医薬品包装の検査用に使われる規格 (数値のみ)"],
+          ],
+        },
+      ];
+      BARCODE_GROUPS.forEach((group) => {
+        const label = document.createElement("div");
+        label.className = "seg-category-label";
+        label.textContent = group.label;
+        box.appendChild(label);
+        const seg = document.createElement("div");
+        seg.className = "segmented segmented-vertical";
+        group.items.forEach(([name, sym, desc]) => {
+          const btn = makeSegButton(name, st.symbology === sym, () => {
+            st.symbology = sym;
+            rebuildControls();
+            render();
+          });
+          btn.title = desc;
+          seg.appendChild(btn);
+        });
+        box.appendChild(seg);
       });
-      box.appendChild(seg);
       return;
     }
 
@@ -257,7 +331,7 @@
         items.push({
           label: String(v),
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
-          fitsCount: versionCodeCount("qr", v),
+          fitsCount: fitsCountCached("qr", v),
           onClick: () => {
             st.versionAuto = false;
             st.version = v;
@@ -295,22 +369,43 @@
       box.appendChild(buildRmqrTileGrid());
       return;
     } else if (std === "datamatrix") {
-      const items = [{ label: "自動", checked: st.sizeAuto, onClick: setAuto, full: true }];
-      DMLib.SIZES.forEach((s, i) => {
-        items.push({
-          label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
-          title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
-          checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
-          fitsCount: versionCodeCount("datamatrix", i + 1),
-          onClick: () => {
-            st.sizeAuto = false;
-            st.size = i + 1;
-            rebuildControls();
-            render();
-          },
-        });
+      const autoBtn = makeSegButton("自動", st.sizeAuto, setAuto);
+      autoBtn.classList.add("seg-btn-full");
+      const autoSeg = document.createElement("div");
+      autoSeg.className = "segmented";
+      autoSeg.appendChild(autoBtn);
+      box.appendChild(autoSeg);
+
+      const makeItem = (s, i) => ({
+        label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
+        title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
+        checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
+        fitsCount: fitsCountCached("datamatrix", i + 1),
+        onClick: () => {
+          st.sizeAuto = false;
+          st.size = i + 1;
+          rebuildControls();
+          render();
+        },
       });
-      box.appendChild(makeTileGrid(items, "minmax(38px, 1fr)"));
+      /* 正方形と長方形で寸法の桁数が大きく異なり、同じボタン幅だと長方形側の
+         ラベル (例: 16×48) が見切れてしまうため、グループごとに分けて
+         長方形側は幅の広いボタンで全文字表示できるようにする */
+      const squareItems = [];
+      const rectItems = [];
+      DMLib.SIZES.forEach((s, i) => (s.rect ? rectItems : squareItems).push(makeItem(s, i)));
+
+      const squareLabel = document.createElement("div");
+      squareLabel.className = "seg-category-label";
+      squareLabel.textContent = "正方形";
+      box.appendChild(squareLabel);
+      box.appendChild(makeTileGrid(squareItems, "38px"));
+
+      const rectLabel = document.createElement("div");
+      rectLabel.className = "seg-category-label";
+      rectLabel.textContent = "長方形";
+      box.appendChild(rectLabel);
+      box.appendChild(makeTileGrid(rectItems, "58px"));
       return;
     } else if (std === "aztec") {
       const items = [{ label: "自動", checked: st.versionAuto, onClick: setAuto, full: true }];
@@ -320,7 +415,7 @@
           label: `C${l}`,
           title: `コンパクト ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === l : st.version === l,
-          fitsCount: versionCodeCount("aztec", l),
+          fitsCount: fitsCountCached("aztec", l),
           onClick: () => { st.versionAuto = false; st.version = l; rebuildControls(); render(); },
         });
       }
@@ -333,7 +428,7 @@
           label: `F${l}`,
           title: `フル ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
-          fitsCount: versionCodeCount("aztec", v),
+          fitsCount: fitsCountCached("aztec", v),
           onClick: () => { st.versionAuto = false; st.version = v; rebuildControls(); render(); },
         });
       }
@@ -348,28 +443,53 @@
         items.push({
           label: String(cols),
           checked: !st.colsAuto && st.cols === cols,
-          fitsCount: versionCodeCount("pdf417", cols),
+          fitsCount: fitsCountCached("pdf417", cols),
           onClick: () => { st.colsAuto = false; st.cols = cols; rebuildControls(); render(); },
         });
       }
-      box.appendChild(makeTileGrid(items, "minmax(28px, 1fr)"));
+      box.appendChild(makeTileGrid(items, "28px"));
       return;
     }
   }
 
   /* ---------- タイル選択UI (クリック数を減らすため、最初から選択肢を表示する) ---------- */
 
+  const FITS_LEGEND_ORDER = ["tile-fits-1", "tile-fits-2", "tile-fits-3", "tile-fits-4", "tile-fits-5plus"];
+  const FITS_LEGEND_LABELS = {
+    "tile-fits-1": "1個", "tile-fits-2": "2個", "tile-fits-3": "3個",
+    "tile-fits-4": "4個", "tile-fits-5plus": "5個以上",
+  };
+
+  /* 型番タイルの色分け (1個で収まる=緑 〜 5個以上必要=赤) は、実際に複数の色が
+     混在するときだけ意味を持つので、そのときだけ凡例を動的に表示する */
+  function buildFitsLegend(classesUsed) {
+    if (classesUsed.size <= 1) return null;
+    const legend = document.createElement("div");
+    legend.className = "tile-fits-legend";
+    for (const cls of FITS_LEGEND_ORDER) {
+      if (!classesUsed.has(cls)) continue;
+      const item = document.createElement("span");
+      item.className = "tile-fits-legend-item";
+      const dot = document.createElement("span");
+      dot.className = "tile-fits-legend-dot " + cls;
+      item.append(dot, document.createTextNode(FITS_LEGEND_LABELS[cls]));
+      legend.appendChild(item);
+    }
+    return legend;
+  }
+
   function makeTileGrid(items, colWidth) {
     const grid = document.createElement("div");
     grid.className = "tile-grid";
     grid.setAttribute("role", "radiogroup");
     if (colWidth) grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${colWidth === true ? "28px" : colWidth}, 1fr))`;
+    const classesUsed = new Set();
     for (const item of items) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = item.full ? "tile tile-full" : "tile";
       const fitsClass = fitsClassFor(item.fitsCount);
-      if (fitsClass) btn.classList.add(fitsClass);
+      if (fitsClass) { btn.classList.add(fitsClass); classesUsed.add(fitsClass); }
       btn.setAttribute("role", "radio");
       btn.setAttribute("aria-checked", item.checked ? "true" : "false");
       btn.disabled = !!item.disabled;
@@ -378,7 +498,11 @@
       btn.addEventListener("click", item.onClick);
       grid.appendChild(btn);
     }
-    return grid;
+    const legend = buildFitsLegend(classesUsed);
+    if (!legend) return grid;
+    const wrapper = document.createElement("div");
+    wrapper.append(grid, legend);
+    return wrapper;
   }
 
   /* rMQR: 高さ×幅の2次元タイル。列(幅)は左ほど小さく、行(高さ)は上ほど単純・小さい選択肢にする */
@@ -391,6 +515,8 @@
     const grid = document.createElement("div");
     grid.className = "tile-grid-2d";
     grid.style.gridTemplateColumns = `auto repeat(${RMQR_TILE_WIDTHS.length}, 1fr)`;
+
+    const classesUsed = new Set();
 
     grid.appendChild(document.createElement("span"));
     for (const w of RMQR_TILE_WIDTHS) {
@@ -420,8 +546,8 @@
           ? !!resolved && resolved.height === h && resolved.width === w
           : st.height === h && st.width === w;
         btn.setAttribute("aria-checked", isChecked ? "true" : "false");
-        const rmqrFitsClass = fitsClassFor(versionCodeCount("rmqr", rmqrVersionOf(h, w)));
-        if (rmqrFitsClass) btn.classList.add(rmqrFitsClass);
+        const rmqrFitsClass = fitsClassFor(fitsCountCached("rmqr", rmqrVersionOf(h, w)));
+        if (rmqrFitsClass) { btn.classList.add(rmqrFitsClass); classesUsed.add(rmqrFitsClass); }
         btn.title = `R${h} × ${w}`;
         btn.textContent = String(w);
         btn.addEventListener("click", () => {
@@ -434,7 +560,11 @@
         grid.appendChild(btn);
       }
     }
-    return grid;
+    const legend = buildFitsLegend(classesUsed);
+    if (!legend) return grid;
+    const wrapper = document.createElement("div");
+    wrapper.append(grid, legend);
+    return wrapper;
   }
 
   /* ---------- マスクコントロール ---------- */
@@ -523,7 +653,6 @@
         rebuildControls();
         drawCurrent();
         renderInfo();
-        syncUrl();
       }));
     });
   }
@@ -1236,12 +1365,13 @@
         console.error(e);
       }
     }
-    syncUrl();
   }
 
-  /* ---------- URLへの状態保存 (規格・内容・色・複雑度・誤り訂正・マスク・分割方式) ---------- */
+  /* ---------- 共有リンク (規格・内容・色・複雑度・誤り訂正・マスク・分割方式を
+     URL クエリパラメーターに変換する)。通常時は URL に書き込まず、「リンクを
+     シェア」ボタンを押したときにだけ生成してクリップボードにコピーする。 */
 
-  function syncUrl() {
+  function buildUrlParams() {
     const std = state.standard;
     const st = state[std];
     const params = new URLSearchParams();
@@ -1280,7 +1410,7 @@
       if (!st.showText) params.set("btxt", "0");
     }
 
-    history.replaceState(null, "", "?" + params.toString());
+    return params;
   }
 
   const STANDARDS = ["qr", "micro", "rmqr", "datamatrix", "aztec", "barcode", "aztecrune", "pdf417"];
@@ -1343,6 +1473,11 @@
       if (params.has("sym")) st.symbology = params.get("sym");
       if (params.has("btxt")) st.showText = params.get("btxt") !== "0";
     }
+
+    /* シェアリンクは一度読み込んだら役目を終えるため、URL からクエリパラメーターを
+       取り除く (以後は通常どおり URL に状態を書き込まない)。履歴は増やさず現在の
+       エントリを置き換えるだけにする。 */
+    history.replaceState(null, "", location.pathname);
 
     return std;
   }
@@ -1727,6 +1862,26 @@
     });
   }
 
+  /* 現在の状態を URL クエリパラメーターに変換した共有リンクをクリップボードに
+     コピーする。通常時は URL に何も書き込まないため、状態を人に伝えたい/
+     ブックマークしたいときだけ明示的にこのボタンで生成する。 */
+  const shareLinkBtn = $("share-link-btn");
+  if (shareLinkBtn) {
+    shareLinkBtn.addEventListener("click", async () => {
+      const url = `${location.origin}${location.pathname}?${buildUrlParams().toString()}`;
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        setCopyStatus("このブラウザはクリップボードへのコピーに対応していません", true);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopyStatus("リンクをコピーしました");
+      } catch (e) {
+        setCopyStatus(`コピーに失敗しました: ${e.message}`, true);
+      }
+    });
+  }
+
   function setCopyStatus(text, isError) {
     const el = $("copy-status");
     if (!el) return;
@@ -1981,36 +2136,31 @@
   $("color-fg").addEventListener("input", () => {
     state.fg = $("color-fg").value;
     drawCurrent();
-    syncUrl();
   });
   $("color-bg").addEventListener("input", () => {
     state.bg = $("color-bg").value;
     drawCurrent();
-    syncUrl();
   });
   $("color-outer").addEventListener("input", () => {
     state.outerBg = $("color-outer").value;
     drawCurrent();
-    syncUrl();
   });
   $("color-outer-same").addEventListener("change", () => {
     state.outerSame = $("color-outer-same").checked;
     $("color-outer").disabled = state.outerSame;
     drawCurrent();
-    syncUrl();
   });
   $("color-reset").addEventListener("click", () => {
     state.fg = "#000000";
     state.bg = "#ffffff";
     state.outerBg = "#e5e7eb";
-    state.outerSame = false;
+    state.outerSame = true;
     $("color-fg").value = state.fg;
     $("color-bg").value = state.bg;
     $("color-outer").value = state.outerBg;
-    $("color-outer").disabled = false;
-    $("color-outer-same").checked = false;
+    $("color-outer").disabled = true;
+    $("color-outer-same").checked = true;
     drawCurrent();
-    syncUrl();
   });
 
   /* ---------- 読み取り (カメラ / 画像) ---------- */
@@ -2047,6 +2197,7 @@
     if (format === F.UPC_A) return { std: "barcode", symbology: "upca" };
     if (format === F.CODE_93) return { std: "barcode", symbology: "code93" };
     if (format === F.ITF) return { std: "barcode", symbology: "itf" };
+    if (format === F.PDF_417) return { std: "pdf417" };
     return null;
   }
 
@@ -2082,6 +2233,30 @@
     }
     setScanStatus(`読み取り成功 (${std === "micro" ? "MicroQR" : "rMQR"})`);
     selectStandard(std);
+    setLeftMode("encode");
+  }
+
+  const BARCODE_SYMBOLOGY_LABEL = { industrial2of5: "Industrial 2 of 5", pharmacode: "Pharmacode" };
+
+  function handleCustom1DResult(found, offCanvas) {
+    const { symbology, text, box } = found;
+    const inner = clampBox(offCanvas, box.x0, box.y0, box.w, box.h);
+    const outer = clampBox(offCanvas, box.x0 - box.w * 0.2, box.y0 - box.h * 0.2, box.w * 1.4, box.h * 1.4);
+    const colors = sampleScanColorsDual(offCanvas, inner, outer);
+    if (colors) {
+      if (colors.fg) state.fg = colors.fg;
+      if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
+      $("color-fg").value = state.fg;
+      $("color-bg").value = state.bg;
+      $("color-outer").value = state.outerBg;
+      $("color-outer").disabled = state.outerSame;
+      $("color-outer-same").checked = state.outerSame;
+    }
+    dataInput.value = text;
+    state.barcode.symbology = symbology;
+    setScanStatus(`読み取り成功 (${BARCODE_SYMBOLOGY_LABEL[symbology] || symbology})`);
+    selectStandard("barcode");
+    setLeftMode("encode");
   }
 
   /* 背景が暗色・コードが明色の反転配色は、通常の二値化では読み取れないため、
@@ -2243,6 +2418,7 @@
       }
       setScanStatus(`読み取り成功 (${ZXing.BarcodeFormat[format]})`);
       selectStandard(mapping.std);
+      setLeftMode("encode");
     } else {
       setScanStatus(`読み取り成功 (このツールでは非対応の形式: ${ZXing.BarcodeFormat[format]})`, true);
       render();
@@ -2336,6 +2512,12 @@
               handleCustomDecodeResult(found, small);
               return;
             }
+            const found1d = Bar1DLib.tryDecodeBarcode1D(small);
+            if (found1d) {
+              stopCameraScan();
+              handleCustom1DResult(found1d, small);
+              return;
+            }
           }
         }
       }
@@ -2361,7 +2543,12 @@
         if (found) {
           handleCustomDecodeResult(found, off);
         } else {
-          setScanStatus("コードが見つかりませんでした", true);
+          const found1d = Bar1DLib.tryDecodeBarcode1D(off);
+          if (found1d) {
+            handleCustom1DResult(found1d, off);
+          } else {
+            setScanStatus("コードが見つかりませんでした", true);
+          }
         }
       }
     };
@@ -2383,14 +2570,13 @@
 
   /* ---------- タブ切り替え ---------- */
 
-  /* モバイル用「規格選択」パネル: デスクトップの .tabs-vertical をそのまま
-     複製し (アイコン・説明文つきのリッチな見た目を再利用)、折りたたみ式の
-     ボタン+パネルとして表示する。「デコード」カテゴリは規格選択と無関係な
-     操作ボタン (#scan-status 等) を含むため、複製すると id が重複して
-     document.getElementById 系のルックアップが壊れる。複製後に取り除く */
+  /* モバイル用「規格選択」パネル: デスクトップの .tabs-vertical (#encode-panel)
+     をそのまま複製し (アイコン・説明文つきのリッチな見た目を再利用)、折りたたみ式の
+     ボタン+パネルとして表示する。複製すると id (#encode-panel) が重複して
+     document.getElementById 系のルックアップが壊れるため、複製後に取り除く */
   const standardComboPanel = $("standard-combo-panel");
   const tabsVerticalClone = document.querySelector(".left-menu-zone > .tabs-vertical").cloneNode(true);
-  tabsVerticalClone.querySelector('.tab-category[data-category="decode"]')?.remove();
+  tabsVerticalClone.removeAttribute("id");
   standardComboPanel.appendChild(tabsVerticalClone);
 
   function selectStandard(std) {
@@ -2417,15 +2603,6 @@
     dataInput.value = "";
     dataInput.focus();
     render();
-  });
-
-  /* サイトタイトル下の「初回ロード時の状態に戻す」ボタン: URL のクエリパラメーターを
-     含め、入力内容・色・複雑度などすべての設定を初回アクセス時の状態にリセットする。
-     状態を1つずつ手動で戻すと漏れが出やすいため、URL を素の状態にしてページ自体を
-     再読み込みする方式にする。 */
-  $("reset-all-btn").addEventListener("click", () => {
-    if (!confirm("入力内容や設定をすべて初回ロード時の状態に戻します。よろしいですか?")) return;
-    location.href = location.pathname;
   });
 
   /* ライト/ダークテーマ切り替え: 未選択時は端末の prefers-color-scheme に従う
@@ -2496,6 +2673,22 @@
     });
   }
 
+  /* デスクトップ左メニューの「エンコード」「デコード」切り替え。規格の
+     選択肢が増え、デコード操作がスクロールしないと見えなくなっていたため、
+     別タブとして切り替えられるようにする (モバイルは元々別UIのため対象外) */
+  const encodePanel = $("encode-panel");
+  const decodePanel = $("decode-panel");
+  function setLeftMode(mode) {
+    for (const b of document.querySelectorAll(".left-mode-btn")) {
+      b.setAttribute("aria-selected", b.dataset.mode === mode ? "true" : "false");
+    }
+    encodePanel.hidden = mode === "decode";
+    decodePanel.hidden = mode !== "decode";
+  }
+  for (const btn of document.querySelectorAll(".left-mode-btn")) {
+    btn.addEventListener("click", () => setLeftMode(btn.dataset.mode));
+  }
+
   /* 「諸元」「外観」はデスクトップでは中央カラムに置くが、モバイルでは
      右メニューゾーンのタブに移して縦幅を節約する。DOM 上の1つの要素を、
      幅の判定に応じて付け替える (2箇所に複製すると renderInfo() 等が
@@ -2532,7 +2725,6 @@
     rebuildControls();
     drawCurrent();
     renderInfo();
-    syncUrl();
   });
 
   new ResizeObserver(() => {

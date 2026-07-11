@@ -33,8 +33,16 @@
   :root:not([data-theme="light"]) { --bg: #3c4149; --surface: #3c4149; --surface-white: #484e57; --text: #eceef0; --text-sub: #9aa0a8; --border: #565c66; --accent: #f2954f; --accent-weak: #47331f; --accent2: #e08a3c; --accent2-weak: #3c2b18; --accent3: #d9731f; --accent3-weak: #362413; --danger: #e57368; --shadow-dark: #292d33; --shadow-light: #4c525c; }
   :root:not([data-theme="light"]) .seg-btn[aria-checked="true"],
   :root:not([data-theme="light"]) .tile[aria-checked="true"],
-  :root:not([data-theme="light"]) .right-menu-tab-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+  :root:not([data-theme="light"]) .right-menu-tab-btn[aria-selected="true"],
+  :root:not([data-theme="light"]) .left-mode-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
   :root:not([data-theme="light"]) .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; box-shadow: none; }
+  :root:not([data-theme="light"]) #ec-control .seg-btn[aria-checked="true"],
+  :root:not([data-theme="light"]) #mask-control .seg-btn[aria-checked="true"],
+  :root:not([data-theme="light"]) #split-mode-control .seg-btn[aria-checked="true"],
+  :root:not([data-theme="light"]) #content-placement-control .seg-btn[aria-checked="true"],
+  :root:not([data-theme="light"]) #version-control .seg-btn[aria-checked="true"],
+  :root:not([data-theme="light"]) #version-control .tile[aria-checked="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+  :root:not([data-theme="light"]) #version-control .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; }
   :root:not([data-theme="light"]) .tile-fits-1, :root:not([data-theme="light"]) .tile-fits-1:hover:not(:disabled) { color: #3ecb79; }
   :root:not([data-theme="light"]) .tile-fits-2, :root:not([data-theme="light"]) .tile-fits-2:hover:not(:disabled) { color: #82c94a; }
   :root:not([data-theme="light"]) .tile-fits-3, :root:not([data-theme="light"]) .tile-fits-3:hover:not(:disabled) { color: #e0bc3a; }
@@ -64,8 +72,16 @@
    いるため、変数自体は変えずに該当セレクタだけ上書きする。 */
 :root[data-theme="dark"] .seg-btn[aria-checked="true"],
 :root[data-theme="dark"] .tile[aria-checked="true"],
-:root[data-theme="dark"] .right-menu-tab-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+:root[data-theme="dark"] .right-menu-tab-btn[aria-selected="true"],
+:root[data-theme="dark"] .left-mode-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
 :root[data-theme="dark"] .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; box-shadow: none; }
+:root[data-theme="dark"] #ec-control .seg-btn[aria-checked="true"],
+:root[data-theme="dark"] #mask-control .seg-btn[aria-checked="true"],
+:root[data-theme="dark"] #split-mode-control .seg-btn[aria-checked="true"],
+:root[data-theme="dark"] #content-placement-control .seg-btn[aria-checked="true"],
+:root[data-theme="dark"] #version-control .seg-btn[aria-checked="true"],
+:root[data-theme="dark"] #version-control .tile[aria-checked="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+:root[data-theme="dark"] #version-control .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; }
 /* コード数の色分けもダークモードではやや明るい色に差し替えてコントラストを確保する */
 :root[data-theme="dark"] .tile-fits-1, :root[data-theme="dark"] .tile-fits-1:hover:not(:disabled) { color: #3ecb79; }
 :root[data-theme="dark"] .tile-fits-2, :root[data-theme="dark"] .tile-fits-2:hover:not(:disabled) { color: #82c94a; }
@@ -192,7 +208,7 @@ body {
   border: none;
   border-radius: var(--radius);
   padding: 6px;
-  box-shadow: var(--neu-raised), 0 10px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -221,6 +237,36 @@ body {
   color: var(--text-sub);
   line-height: 1.4;
 }
+
+/* エンコード/デコードの切替トグル (ニューモーフィズムの窪んだトラックに
+   選択中の面だけ浮き出させる)。規格の選択肢が増えてデコード操作がスクロール
+   しないと見えなくなっていたため、左メニューをタブで切り替えられるようにする */
+.left-mode-toggle {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--neu-inset-sm);
+}
+.left-mode-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 0;
+  border-radius: calc(var(--radius) - 5px);
+  cursor: pointer;
+}
+.left-mode-btn[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--neu-raised-sm);
+}
+.decode-panel { display: flex; flex-direction: column; }
 
 .tabs-vertical {
   display: flex;
@@ -437,6 +483,17 @@ textarea:focus, select:focus, input:focus-visible,
 .segmented-vertical .seg-btn {
   width: 100%;
 }
+.seg-category-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.06em;
+  padding: 0 2px;
+  margin: 4px 0 -2px;
+}
+.seg-category-label:first-child {
+  margin-top: 0;
+}
 .seg-btn {
   border: none;
   background: var(--surface);
@@ -462,6 +519,9 @@ textarea:focus, select:focus, input:focus-visible,
 }
 .seg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .seg-btn-full { flex: 1 0 100%; }
+/* 縦並び (segmented-vertical) では主軸が縦になるため、flex-basis:100% のままだと
+   このボタンだけコンテナの高さいっぱいに伸びてしまう。他のボタンと同じ高さに戻す */
+.segmented-vertical .seg-btn-full { flex: 0 0 auto; }
 .seg-note {
   font-size: 11px;
   color: var(--text-sub);
@@ -579,10 +639,6 @@ textarea:focus, select:focus, input:focus-visible,
   gap: 10px;
 }
 .decode-group .small-button { width: 100%; }
-/* デスクトップではラベル付きのボタンとして表示し、アイコンは隠す。
-   モバイルではタイトル右のミニ丸ボタン (アイコンのみ) に切り替える (下の @media 参照) */
-#reset-all-btn { width: 100%; }
-.reset-all-icon { display: none; }
 /* テーマ切り替えは常に絵文字アイコンのみの小さなトグルにする (デスクトップ/モバイル共通) */
 #theme-toggle-btn {
   width: 28px;
@@ -702,6 +758,30 @@ textarea:focus, select:focus, input:focus-visible,
 }
 .tile:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* 型番タイルの色分けが複数種類混在するときだけ表示する凡例。ドットの色は
+   .tile-fits-N の文字色 (currentColor) をそのまま流用し、ライト/ダーク
+   それぞれの色定義を二重管理しないようにする */
+.tile-fits-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-sub);
+}
+.tile-fits-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tile-fits-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
 /* rMQR: 高さ×幅の2次元タイル */
 .tile-grid-2d {
   display: grid;
@@ -718,6 +798,33 @@ textarea:focus, select:focus, input:focus-visible,
 .tile-grid-2d .tile { font-size: 9px; padding: 3px 0; }
 .tile-grid-2d .tile:disabled { visibility: hidden; opacity: 1; }
 
+/* 誤り訂正・マスクパターン・容量超過時の分割方式・型番・コード下の内容表示は、
+   複数の選択肢から1つだけ選ぶトグルUIであるため、左メニューのエンコード/
+   デコード切替と統一感のある「窪んだトラック+選択中だけ浮き上がる」
+   ニューモーフィズム表現にする (通常の .seg-btn/.tile は「常に浮き出て
+   選択中だけ窪む」表現のままなので、他の用途 (規格タブ・保存範囲など) には
+   影響しない) */
+#ec-control, #mask-control, #split-mode-control, #content-placement-control,
+#version-control .segmented, #version-control .tile-grid, #version-control .tile-grid-2d {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--neu-inset-sm);
+  padding: 4px;
+}
+#ec-control .seg-btn, #mask-control .seg-btn, #split-mode-control .seg-btn,
+#content-placement-control .seg-btn, #version-control .seg-btn, #version-control .tile {
+  background: transparent;
+  box-shadow: none;
+}
+#ec-control .seg-btn[aria-checked="true"], #mask-control .seg-btn[aria-checked="true"],
+#split-mode-control .seg-btn[aria-checked="true"], #content-placement-control .seg-btn[aria-checked="true"],
+#version-control .seg-btn[aria-checked="true"], #version-control .tile[aria-checked="true"] {
+  background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
+  color: var(--accent);
+}
+#version-control .other-standard .seg-btn[aria-checked="true"] { color: var(--accent2); }
+
 /* ---------- モバイル ----------
    デスクトップは3ゾーンを横並び・site-body 内スクロールで「1画面完結」を
    狙うが、モバイル幅ではその前提が成立しないため、上から
@@ -728,10 +835,21 @@ textarea:focus, select:focus, input:focus-visible,
   .site-body {
     flex-direction: column;
     height: auto;
-    min-height: 100%;
+    /* コンテンツが少ない場合でもスマホ画面の縦幅いっぱいまでは必ず確保する。
+       100% だとコンテンツが短いときにサイト自体の高さも縮み、規格選択・
+       デコードのプルダウンパネルがその短い高さでクリップされて見切れて
+       いたため、常にビューポート高さ (100dvh) を最低保証する */
+    min-height: 100dvh;
     overflow-y: visible;
   }
-  html, body { height: auto; min-height: 100%; overflow-y: auto; }
+  html, body { height: auto; min-height: 100dvh; overflow-y: auto; }
+
+  /* タイトル横のロゴはモバイルでは横幅節約のため非表示にする */
+  .site-title-icon { display: none; }
+
+  /* 規格選択・デコードのプルダウンボタンにはニューモーフィズムの浮き出し影をつけ、
+     開いたときに出るモーダル (.quick-combo-panel) 側は影なしにする */
+  .quick-combo-btn { box-shadow: var(--neu-raised-sm); }
 
   .left-menu-zone, .right-menu-zone {
     flex: none;
@@ -765,20 +883,11 @@ textarea:focus, select:focus, input:focus-visible,
      常設のリッチカード・デコードボタン・注意書きは非表示にする
      (中身は .quick-combo-panel 側に複製済み・説明書きも複製して表示する) */
   .mobile-quick-select { display: flex; flex: 1; gap: 6px; }
+  /* 「読取り」は「規格」に比べて選ぶ機会が少ないため、横幅を従来の6割程度
+     (2分割時の50%→30%) に短くし、その分「規格」を広げて見やすくする */
+  #standard-combo { flex: 7; }
+  #decode-combo { flex: 5; }
   #mobile-scan-status-slot:not(:empty) { margin-top: 4px; }
-  /* 「条件をリセット」ボタンをタイトル右にアイコンのみのミニボタンとして配置し、
-     縦幅を節約する (ラベルは視覚的に隠すが、スクリーンリーダー向けには残す) */
-  #reset-all-btn {
-    width: 28px;
-    height: 28px;
-    flex: none;
-    padding: 0;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .reset-all-icon { display: inline; font-size: 15px; line-height: 1; }
   .reset-all-label {
     position: absolute;
     width: 1px;
@@ -787,9 +896,10 @@ textarea:focus, select:focus, input:focus-visible,
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
   }
-  .left-menu-zone > .tabs-vertical { display: none; }
-  #scan-camera-btn, #scan-image-btn, .scan-note,
-  .tab-category[data-category="decode"] .tab-category-label { display: none; }
+  .left-menu-zone > .tabs-vertical,
+  .left-menu-zone > .left-mode-toggle,
+  .left-menu-zone > .decode-panel { display: none; }
+  #scan-camera-btn, #scan-image-btn, .scan-note { display: none; }
 
   .center-content-zone.layout.preview {
     flex: none;
@@ -879,6 +989,15 @@ textarea:focus, select:focus, input:focus-visible,
   }
   .right-menu-panel { display: flex; flex-direction: column; gap: 16px; }
   .right-menu-panel.tab-inactive { display: none; }
+
+  /* QR の「設定」タブ (誤り訂正) はデスクトップでは縦並びだが、モバイルは
+     縦幅を節約するため横並びに戻す (縦並び用の幅100%指定も打ち消す) */
+  #ec-control.ec-control-qr { flex-direction: row; flex-wrap: wrap; }
+  #ec-control.ec-control-qr .seg-btn { width: auto; }
+
+  /* 「型式」タブの「自動」ボタンの下は、grid の gap だけだと数字ボタンの
+     影と近すぎて重なって見えるため、余白をその分 (現状の2倍) 広げる */
+  .tile-grid .tile-full { margin-bottom: 6px; }
 }
 
 /* 縦幅の低いモバイル (iPhone SE 等) では QR 表示域と余白をさらに切り詰める。
@@ -898,6 +1017,7 @@ textarea:focus, select:focus, input:focus-visible,
   .right-menu-tabs { gap: 3px; margin-bottom: 6px; padding: 2px; }
   .right-menu-panel { gap: 8px; }
   .field { gap: 3px; }
+  .tile-grid .tile-full { margin-bottom: 3px; }
 }
 
 /* さらに縦幅が厳しい端末向けの追加の切り詰め */
