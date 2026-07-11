@@ -93,10 +93,11 @@ body {
 .site-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  gap: 8px;
+  font-family: "Press Start 2P", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .site-title-icon {
@@ -554,8 +555,28 @@ textarea:focus, select:focus, input:focus-visible,
 .decode-group .small-button { width: 100%; }
 /* デスクトップではラベル付きのボタンとして表示し、アイコンは隠す。
    モバイルではタイトル右のミニ丸ボタン (アイコンのみ) に切り替える (下の @media 参照) */
-#reset-all-btn, #theme-toggle-btn { width: 100%; }
-.reset-all-icon, .theme-toggle-icon { display: none; }
+#reset-all-btn { width: 100%; }
+.reset-all-icon { display: none; }
+/* テーマ切り替えは常に絵文字アイコンのみの小さなトグルにする (デスクトップ/モバイル共通) */
+#theme-toggle-btn {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-toggle-icon { display: inline; font-size: 15px; line-height: 1; }
+#theme-toggle-btn .reset-all-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
 .scan-status {
   font-size: 11px;
   color: var(--text-sub);
@@ -695,7 +716,7 @@ textarea:focus, select:focus, input:focus-visible,
     padding: 4px 12px 8px;
     gap: 8px;
   }
-  .site-title { font-size: 13px; flex: none; }
+  .site-title { font-size: 10px; flex: none; }
   .tab { padding: 3px 10px; font-size: 12px; }
 
   /* タイトルと規格選択・デコードの折りたたみメニューを1行にまとめ、
@@ -712,7 +733,7 @@ textarea:focus, select:focus, input:focus-visible,
   #mobile-scan-status-slot:not(:empty) { margin-top: 4px; }
   /* 「条件をリセット」ボタンをタイトル右にアイコンのみのミニボタンとして配置し、
      縦幅を節約する (ラベルは視覚的に隠すが、スクリーンリーダー向けには残す) */
-  #reset-all-btn, #theme-toggle-btn {
+  #reset-all-btn {
     width: 28px;
     height: 28px;
     flex: none;
@@ -722,7 +743,7 @@ textarea:focus, select:focus, input:focus-visible,
     align-items: center;
     justify-content: center;
   }
-  .reset-all-icon, .theme-toggle-icon { display: inline; font-size: 15px; line-height: 1; }
+  .reset-all-icon { display: inline; font-size: 15px; line-height: 1; }
   .reset-all-label {
     position: absolute;
     width: 1px;
