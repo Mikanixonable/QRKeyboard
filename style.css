@@ -30,15 +30,19 @@
   --neu-inset-sm: inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #2b2e33; --surface: #2b2e33; --surface-white: #383c43; --text: #eceef0; --text-sub: #9aa0a8; --border: #40454c; --accent: #f2954f; --accent-weak: #47331f; --accent2: #e08a3c; --accent2-weak: #3c2b18; --accent3: #d9731f; --accent3-weak: #362413; --danger: #e57368; --shadow-dark: #1d1f22; --shadow-light: #383c43; }
+  :root:not([data-theme="light"]) { --bg: #3c4149; --surface: #3c4149; --surface-white: #484e57; --text: #eceef0; --text-sub: #9aa0a8; --border: #565c66; --accent: #f2954f; --accent-weak: #47331f; --accent2: #e08a3c; --accent2-weak: #3c2b18; --accent3: #d9731f; --accent3-weak: #362413; --danger: #e57368; --shadow-dark: #292d33; --shadow-light: #4c525c; }
+  :root:not([data-theme="light"]) .seg-btn[aria-checked="true"],
+  :root:not([data-theme="light"]) .tile[aria-checked="true"],
+  :root:not([data-theme="light"]) .right-menu-tab-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+  :root:not([data-theme="light"]) .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; box-shadow: none; }
 }
 :root[data-theme="dark"] {
-  --bg: #2b2e33;
-  --surface: #2b2e33;
-  --surface-white: #383c43;
+  --bg: #3c4149;
+  --surface: #3c4149;
+  --surface-white: #484e57;
   --text: #eceef0;
   --text-sub: #9aa0a8;
-  --border: #40454c;
+  --border: #565c66;
   --accent: #f2954f;
   --accent-weak: #47331f;
   --accent2: #e08a3c;
@@ -46,9 +50,17 @@
   --accent3: #d9731f;
   --accent3-weak: #362413;
   --danger: #e57368;
-  --shadow-dark: #1d1f22;
-  --shadow-light: #383c43;
+  --shadow-dark: #292d33;
+  --shadow-light: #4c525c;
 }
+/* ダークモードでは「濃い茶色背景+オレンジ文字」ではなく、選択中タブ/QR系
+   タブ等 (.tab-group-qr など) と統一して「オレンジ背景+白文字」にする。
+   --accent-weak 自体は他の用途 (諸元パネルの薄色背景など) にも使われて
+   いるため、変数自体は変えずに該当セレクタだけ上書きする。 */
+:root[data-theme="dark"] .seg-btn[aria-checked="true"],
+:root[data-theme="dark"] .tile[aria-checked="true"],
+:root[data-theme="dark"] .right-menu-tab-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+:root[data-theme="dark"] .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; box-shadow: none; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -93,10 +105,10 @@ body {
 .site-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: "Press Start 2P", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 400;
+  gap: 6px;
+  font-family: "JetBrains Mono", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", system-ui, monospace;
+  font-size: 15px;
+  font-weight: 500;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -216,7 +228,7 @@ body {
 .tab-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
   background: var(--surface);
   border: none;
   box-shadow: var(--neu-inset-sm);
@@ -402,7 +414,7 @@ textarea:focus, select:focus, input:focus-visible,
 .segmented {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 8px;
 }
 .segmented-vertical {
   flex-direction: column;
@@ -442,7 +454,7 @@ textarea:focus, select:focus, input:focus-visible,
 }
 
 /* マスク選択: 「自動」を全幅、番号ボタンを等幅グリッドに */
-.mask-grid { display: grid; gap: 4px; }
+.mask-grid { display: grid; gap: 8px; }
 .mask-grid .seg-btn { min-width: 0; }
 .mask-grid .seg-btn:first-child { grid-column: 1 / -1; }
 
@@ -508,7 +520,7 @@ textarea:focus, select:focus, input:focus-visible,
 .save-menu {
   display: flex;
   justify-content: center;
-  gap: 8px;
+  gap: 14px;
 }
 
 .qr-card {
@@ -550,7 +562,7 @@ textarea:focus, select:focus, input:focus-visible,
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 10px;
 }
 .decode-group .small-button { width: 100%; }
 /* デスクトップではラベル付きのボタンとして表示し、アイコンは隠す。
@@ -635,7 +647,7 @@ textarea:focus, select:focus, input:focus-visible,
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
-  gap: 3px;
+  gap: 6px;
 }
 .tile-grid .tile-full { grid-column: 1 / -1; }
 .tile {
@@ -670,7 +682,7 @@ textarea:focus, select:focus, input:focus-visible,
 /* rMQR: 高さ×幅の2次元タイル */
 .tile-grid-2d {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
 }
 .tile-grid-2d .tile-axis-label {
@@ -716,7 +728,7 @@ textarea:focus, select:focus, input:focus-visible,
     padding: 4px 12px 8px;
     gap: 8px;
   }
-  .site-title { font-size: 10px; flex: none; }
+  .site-title { font-size: 13px; flex: none; }
   .tab { padding: 3px 10px; font-size: 12px; }
 
   /* タイトルと規格選択・デコードの折りたたみメニューを1行にまとめ、
@@ -812,21 +824,23 @@ textarea:focus, select:focus, input:focus-visible,
   #right-menu-info-panel #info-label { display: none; }
   #right-menu-color-panel #color-label { display: none; }
 
-  /* 右メニューゾーンをタブ3枚 (設定 / 型式 / 諸元) に分けて縦幅を節約。
-     ボタンの見た目だと切り替え UI だとわかりにくいため、下線でアクティブ
-     タブを示す「ノートブックタブ」風の見た目にする */
+  /* 右メニューゾーンをタブ4枚 (外観 / 設定 / 型式 / 諸元) に分けて縦幅を節約。
+     他のボタン群と統一感を持たせ、凹んだ帯の中に選択中タブだけが
+     浮き上がるニューモーフィズム表現にする (.tab-group / .seg-btn と同系統)。 */
   .right-menu-tabs {
     display: flex;
-    gap: 2px;
-    margin-bottom: 10px;
-    border-bottom: 2px solid var(--border);
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 3px;
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--neu-inset-sm);
   }
   .right-menu-tab-btn {
     flex: 1;
     border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    background: none;
+    border-radius: 9px;
+    background: transparent;
     color: var(--text-sub);
     font: inherit;
     font-size: 12.5px;
@@ -835,20 +849,38 @@ textarea:focus, select:focus, input:focus-visible,
     cursor: pointer;
   }
   .right-menu-tab-btn[aria-selected="true"] {
+    background: var(--accent-weak);
+    box-shadow: var(--neu-raised-sm);
     color: var(--accent);
     font-weight: 700;
-    border-bottom-color: var(--accent);
   }
   .right-menu-panel { display: flex; flex-direction: column; gap: 16px; }
   .right-menu-panel.tab-inactive { display: none; }
 }
 
-/* 縦幅の低いモバイル (iPhone SE 等) では QR 表示域と余白をさらに切り詰める */
+/* 縦幅の低いモバイル (iPhone SE 等) では QR 表示域と余白をさらに切り詰める。
+   ボタン間隔もスクロールフリーを維持できる範囲まで戻す (影の重なりよりも
+   縦幅超過を優先して回避する)。 */
 @media (max-width: 760px) and (max-height: 700px) {
   .content-middle { gap: 2px; --qr-frame-width: 190px; }
   .center-content-zone.layout.preview { padding: 2px 12px; gap: 6px; }
   .left-menu-zone { padding: 6px 12px 2px; gap: 6px; }
   .right-menu-zone { padding: 2px 12px 6px; gap: 6px; }
+  .tab-group { gap: 3px; }
+  .decode-group { gap: 6px; }
+  .segmented, .mask-grid { gap: 4px; }
+  .tile-grid { gap: 3px; }
+  .tile-grid-2d { gap: 2px; }
+  .save-menu { gap: 8px; }
+  .right-menu-tabs { gap: 3px; margin-bottom: 6px; padding: 2px; }
+  .right-menu-panel { gap: 8px; }
+  .field { gap: 3px; }
+}
+
+/* さらに縦幅が厳しい端末向けの追加の切り詰め */
+@media (max-width: 760px) and (max-height: 620px) {
+  .content-middle { --qr-frame-width: 160px; }
+  .right-menu-panel { gap: 6px; }
 }
 
 /* 高さの低い横向きモバイルなど */

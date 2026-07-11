@@ -125,7 +125,7 @@
       return;
     }
     if (std === "aztec") {
-      [["10%", 0], ["23% (推奨)", 1], ["36%", 2], ["50%", 3]].forEach(([label, idx]) => {
+      [["10%", 0], ["23%", 1], ["36%", 2], ["50%", 3]].forEach(([label, idx]) => {
         box.appendChild(makeSegButton(label, st.ec === idx, () => {
           st.ec = idx;
           rebuildControls();
