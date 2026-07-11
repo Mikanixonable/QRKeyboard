@@ -99,6 +99,7 @@
   function buildEcControl() {
     const box = $("ec-control");
     box.textContent = "";
+    box.className = "segmented";
     const std = state.standard;
     if (std === "aztecrune") { $("ec-field").hidden = true; return; }
     const st = state[std];
@@ -136,6 +137,8 @@
     }
     if (std === "barcode") return;
 
+    if (std === "qr") box.classList.add("segmented-vertical");
+
     const options = {
       qr: [["L (7%)", "L"], ["M (15%)", "M"], ["Q (25%)", "Q"], ["H (30%)", "H"]],
       micro: [["L", "L"], ["M", "M"], ["Q", "Q"]],
@@ -156,35 +159,55 @@
     }
   }
 
-  /* 指定した型番(複雑度)で現在の入力内容が1コードに収まるか判定する。
-     state を変更せず、ライブラリを直接呼び出して確かめる */
-  function versionFitsSingleCode(std, version) {
+  /* 指定した型番(複雑度)で現在の入力内容が何個のコードに分割されるかを判定する。
+     1〜4 はそのままの個数、5以上は 5 (「5+」扱い) を返す。0 は判定不能 (入力なし等)。
+     state を変更せず、ライブラリを直接呼び出して確かめる。分割数の探索は
+     コード数5個分までで打ち切り、長大な入力でも計算量を抑える。 */
+  function versionCodeCount(std, version) {
     const text = dataInput.value;
-    if (!text) return false;
+    if (!text) return 0;
     const st = state[std];
-    try {
+    const MAX_SHOWN = 5;
+    const encodeAt = (t) => {
       switch (std) {
         case "qr":
         case "micro":
-          QRLib.encode({ standard: std, text, ecLevel: st.ec, version, mask: -1 });
-          return true;
+          return QRLib.encode({ standard: std, text: t, ecLevel: st.ec, version, mask: -1 });
         case "rmqr":
-          QRLib.encode({ standard: "rmqr", text, ecLevel: st.ec, version });
-          return true;
+          return QRLib.encode({ standard: "rmqr", text: t, ecLevel: st.ec, version });
         case "datamatrix":
-          DMLib.encode({ text, size: version });
-          return true;
+          return DMLib.encode({ text: t, size: version });
         case "aztec":
-          AZLib.encode({ text, ecIndex: st.ec, version });
-          return true;
+          return AZLib.encode({ text: t, ecIndex: st.ec, version });
         case "pdf417":
-          PDF417Lib.encode({ text, eccLevel: st.ecAuto ? null : st.ec, cols: version });
-          return true;
+          return PDF417Lib.encode({ text: t, eccLevel: st.ecAuto ? null : st.ec, cols: version });
       }
+    };
+    try {
+      encodeAt(text);
+      return 1;
     } catch (e) {
-      return false;
+      if (!(e && e.code === "TOO_LONG")) return 0;
     }
-    return false;
+    let lastChunkCount = -1;
+    for (let count = 2; count <= MAX_SHOWN; count++) {
+      const chunks = splitEvenly(text, Math.min(count, text.length));
+      if (chunks.length === lastChunkCount) continue;
+      lastChunkCount = chunks.length;
+      try {
+        chunks.forEach((chunk) => encodeAt(chunk));
+        return chunks.length;
+      } catch (e) {
+        if (!(e && e.code === "TOO_LONG")) return 0;
+      }
+    }
+    return MAX_SHOWN; // 「5+」扱い
+  }
+
+  /* コード数(1〜5+)に応じたタイル用の CSS クラス名 */
+  function fitsClassFor(count) {
+    if (!count) return null;
+    return "tile-fits-" + Math.min(count, 5) + (count >= 5 ? "plus" : "");
   }
 
   /* ---------- 複雑度(型番)コントロール ---------- */
@@ -234,7 +257,7 @@
         items.push({
           label: String(v),
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
-          fits: versionFitsSingleCode("qr", v),
+          fitsCount: versionCodeCount("qr", v),
           onClick: () => {
             st.versionAuto = false;
             st.version = v;
@@ -247,7 +270,7 @@
       return;
     } else if (std === "micro") {
       const seg = document.createElement("div");
-      seg.className = "segmented";
+      seg.className = "segmented segmented-vertical";
       const autoBtn = makeSegButton("自動", st.versionAuto, setAuto);
       autoBtn.classList.add("seg-btn-full");
       seg.appendChild(autoBtn);
@@ -278,7 +301,7 @@
           label: s.h === s.w ? String(s.h) : DMLib.SIZE_NAMES[i],
           title: `${DMLib.SIZE_NAMES[i]} (${s.data} 語)${s.rect ? " ・長方形" : ""}`,
           checked: st.sizeAuto ? !!resolved && resolved.sizeIndex === i + 1 : st.size === i + 1,
-          fits: versionFitsSingleCode("datamatrix", i + 1),
+          fitsCount: versionCodeCount("datamatrix", i + 1),
           onClick: () => {
             st.sizeAuto = false;
             st.size = i + 1;
@@ -297,7 +320,7 @@
           label: `C${l}`,
           title: `コンパクト ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === l : st.version === l,
-          fits: versionFitsSingleCode("aztec", l),
+          fitsCount: versionCodeCount("aztec", l),
           onClick: () => { st.versionAuto = false; st.version = l; rebuildControls(); render(); },
         });
       }
@@ -310,7 +333,7 @@
           label: `F${l}`,
           title: `フル ${l}層 (${dim}×${dim})`,
           checked: st.versionAuto ? !!resolved && resolved.version === v : st.version === v,
-          fits: versionFitsSingleCode("aztec", v),
+          fitsCount: versionCodeCount("aztec", v),
           onClick: () => { st.versionAuto = false; st.version = v; rebuildControls(); render(); },
         });
       }
@@ -325,7 +348,7 @@
         items.push({
           label: String(cols),
           checked: !st.colsAuto && st.cols === cols,
-          fits: versionFitsSingleCode("pdf417", cols),
+          fitsCount: versionCodeCount("pdf417", cols),
           onClick: () => { st.colsAuto = false; st.cols = cols; rebuildControls(); render(); },
         });
       }
@@ -345,7 +368,8 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = item.full ? "tile tile-full" : "tile";
-      if (item.fits) btn.classList.add("tile-fits");
+      const fitsClass = fitsClassFor(item.fitsCount);
+      if (fitsClass) btn.classList.add(fitsClass);
       btn.setAttribute("role", "radio");
       btn.setAttribute("aria-checked", item.checked ? "true" : "false");
       btn.disabled = !!item.disabled;
@@ -396,7 +420,8 @@
           ? !!resolved && resolved.height === h && resolved.width === w
           : st.height === h && st.width === w;
         btn.setAttribute("aria-checked", isChecked ? "true" : "false");
-        if (versionFitsSingleCode("rmqr", rmqrVersionOf(h, w))) btn.classList.add("tile-fits");
+        const rmqrFitsClass = fitsClassFor(versionCodeCount("rmqr", rmqrVersionOf(h, w)));
+        if (rmqrFitsClass) btn.classList.add(rmqrFitsClass);
         btn.title = `R${h} × ${w}`;
         btn.textContent = String(w);
         btn.addEventListener("click", () => {
@@ -2516,4 +2541,11 @@
 
   const restoredStd = loadFromUrl();
   selectStandard(restoredStd || "qr");
+
+  /* PWA: オフラインでも起動・生成できるようアプリ一式をキャッシュする */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => { /* オフライン等での登録失敗は無視 */ });
+    });
+  }
 })();

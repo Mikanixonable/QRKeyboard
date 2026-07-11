@@ -35,6 +35,11 @@
   :root:not([data-theme="light"]) .tile[aria-checked="true"],
   :root:not([data-theme="light"]) .right-menu-tab-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
   :root:not([data-theme="light"]) .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; box-shadow: none; }
+  :root:not([data-theme="light"]) .tile-fits-1, :root:not([data-theme="light"]) .tile-fits-1:hover:not(:disabled) { color: #3ecb79; }
+  :root:not([data-theme="light"]) .tile-fits-2, :root:not([data-theme="light"]) .tile-fits-2:hover:not(:disabled) { color: #82c94a; }
+  :root:not([data-theme="light"]) .tile-fits-3, :root:not([data-theme="light"]) .tile-fits-3:hover:not(:disabled) { color: #e0bc3a; }
+  :root:not([data-theme="light"]) .tile-fits-4, :root:not([data-theme="light"]) .tile-fits-4:hover:not(:disabled) { color: #ef9a4e; }
+  :root:not([data-theme="light"]) .tile-fits-5plus, :root:not([data-theme="light"]) .tile-fits-5plus:hover:not(:disabled) { color: #e57368; }
 }
 :root[data-theme="dark"] {
   --bg: #3c4149;
@@ -61,6 +66,12 @@
 :root[data-theme="dark"] .tile[aria-checked="true"],
 :root[data-theme="dark"] .right-menu-tab-btn[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: none; }
 :root[data-theme="dark"] .other-standard .seg-btn[aria-checked="true"] { background: var(--accent2); color: #fff; box-shadow: none; }
+/* コード数の色分けもダークモードではやや明るい色に差し替えてコントラストを確保する */
+:root[data-theme="dark"] .tile-fits-1, :root[data-theme="dark"] .tile-fits-1:hover:not(:disabled) { color: #3ecb79; }
+:root[data-theme="dark"] .tile-fits-2, :root[data-theme="dark"] .tile-fits-2:hover:not(:disabled) { color: #82c94a; }
+:root[data-theme="dark"] .tile-fits-3, :root[data-theme="dark"] .tile-fits-3:hover:not(:disabled) { color: #e0bc3a; }
+:root[data-theme="dark"] .tile-fits-4, :root[data-theme="dark"] .tile-fits-4:hover:not(:disabled) { color: #ef9a4e; }
+:root[data-theme="dark"] .tile-fits-5plus, :root[data-theme="dark"] .tile-fits-5plus:hover:not(:disabled) { color: #e57368; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -171,7 +182,10 @@ body {
   position: absolute;
   top: calc(100% + 4px);
   z-index: 30;
-  max-height: min(70vh, 480px);
+  /* ボタン自身の上端オフセット (概ね44px) を差し引き、画面下端を超えないようにする。
+     以前は 480px の固定上限があり、縦幅の大きい端末でも選択肢が途中で
+     見切れていたため、実際に使える高さいっぱいまで表示できるようにする */
+  max-height: min(85vh, calc(100dvh - 56px));
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--surface);
@@ -667,10 +681,19 @@ textarea:focus, select:focus, input:focus-visible,
   white-space: nowrap;
 }
 .tile:hover:not(:disabled) { color: var(--accent); }
-.tile-fits {
-  color: var(--accent2);
-}
-.tile-fits:hover:not(:disabled) { color: var(--accent2); }
+/* 選択中のコード数によって色分けする (1個で収まる=緑 〜 5個以上必要=赤)。
+   「型番を上げるほど分割数が減る」ことが一目でわかるようにするための指標で、
+   アプリ本体のオレンジ系アクセントとは独立した信号色を使う。 */
+.tile-fits-1 { color: #1f9d55; }
+.tile-fits-2 { color: #4f9d1f; }
+.tile-fits-3 { color: #b8960f; }
+.tile-fits-4 { color: #d9731f; }
+.tile-fits-5plus { color: #c0392b; }
+.tile-fits-1:hover:not(:disabled) { color: #1f9d55; }
+.tile-fits-2:hover:not(:disabled) { color: #4f9d1f; }
+.tile-fits-3:hover:not(:disabled) { color: #b8960f; }
+.tile-fits-4:hover:not(:disabled) { color: #d9731f; }
+.tile-fits-5plus:hover:not(:disabled) { color: #c0392b; }
 .tile[aria-checked="true"] {
   background: var(--accent-weak);
   box-shadow: var(--neu-inset-sm);
