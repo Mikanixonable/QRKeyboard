@@ -259,6 +259,32 @@
 
   /* ---------- 複雑度(型番)コントロール ---------- */
 
+  /* 規格数が多く初心者には選びづらいため、よく使われる規格とそれ以外を
+     見出しで分け、各ボタンに title (ツールチップ) で簡単な説明を添える */
+  const BARCODE_GROUPS = [
+    {
+      label: "よく使われる規格",
+      items: [
+        ["JAN / EAN-13", "ean13", "書籍・食品など小売商品の値札で最も一般的な規格"],
+        ["Code 128", "code128", "英数字・記号を扱える汎用規格。物流・工業用途で広く使用"],
+        ["Code 39", "code39", "英数字を扱えるシンプルな規格。工業・タグ用途で使用"],
+        ["UPC-A", "upca", "北米の小売商品で使われる規格 (JAN/EANの近縁)"],
+        ["ITF-14", "itf14", "段ボールなど梱包・物流用の数字14桁規格"],
+      ],
+    },
+    {
+      label: "その他の規格",
+      items: [
+        ["GS1 DataBar-14", "gs1databar", "小型商品にも印字できるJAN/EAN代替規格"],
+        ["Code 93", "code93", "Code 39の高密度版。より短く印字できる"],
+        ["ITF", "itf", "偶数桁の数字を扱う物流用規格"],
+        ["Industrial 2 of 5", "industrial2of5", "数字のみを扱うシンプルな工業用規格"],
+        ["Pharmacode", "pharmacode", "医薬品包装の検査用に使われる規格 (数値のみ)"],
+      ],
+    },
+  ];
+  const BARCODE_SYMBOLOGIES = BARCODE_GROUPS.flatMap((g) => g.items.map(([, sym]) => sym));
+
   function buildVersionControl() {
     const box = $("version-control");
     const label = $("version-label");
@@ -270,30 +296,6 @@
     label.textContent = std === "barcode" ? "種類" : std === "pdf417" ? "列数" : "型番(複雑度)";
 
     if (std === "barcode") {
-      /* 規格数が多く初心者には選びづらいため、よく使われる規格とそれ以外を
-         見出しで分け、各ボタンに title (ツールチップ) で簡単な説明を添える */
-      const BARCODE_GROUPS = [
-        {
-          label: "よく使われる規格",
-          items: [
-            ["JAN / EAN-13", "ean13", "書籍・食品など小売商品の値札で最も一般的な規格"],
-            ["Code 128", "code128", "英数字・記号を扱える汎用規格。物流・工業用途で広く使用"],
-            ["Code 39", "code39", "英数字を扱えるシンプルな規格。工業・タグ用途で使用"],
-            ["UPC-A", "upca", "北米の小売商品で使われる規格 (JAN/EANの近縁)"],
-            ["ITF-14", "itf14", "段ボールなど梱包・物流用の数字14桁規格"],
-          ],
-        },
-        {
-          label: "その他の規格",
-          items: [
-            ["GS1 DataBar-14", "gs1databar", "小型商品にも印字できるJAN/EAN代替規格"],
-            ["Code 93", "code93", "Code 39の高密度版。より短く印字できる"],
-            ["ITF", "itf", "偶数桁の数字を扱う物流用規格"],
-            ["Industrial 2 of 5", "industrial2of5", "数字のみを扱うシンプルな工業用規格"],
-            ["Pharmacode", "pharmacode", "医薬品包装の検査用に使われる規格 (数値のみ)"],
-          ],
-        },
-      ];
       BARCODE_GROUPS.forEach((group) => {
         const label = document.createElement("div");
         label.className = "seg-category-label";
@@ -718,11 +720,13 @@
     }
   }
 
-  /* 文字数ベースの均等分割 (structured append 時も含め、境界はコードポイント単位) */
+  /* 文字数ベースの均等分割 (structured append 時も含め、境界はコードポイント単位。
+     String#slice だとサロゲートペアの途中で分断され絵文字等が壊れる) */
   function splitEvenly(text, count) {
-    const per = Math.ceil(text.length / count);
+    const cps = Array.from(text);
+    const per = Math.ceil(cps.length / count);
     const chunks = [];
-    for (let i = 0; i < text.length; i += per) chunks.push(text.slice(i, i + per));
+    for (let i = 0; i < cps.length; i += per) chunks.push(cps.slice(i, i + per).join(""));
     return chunks;
   }
 
@@ -919,7 +923,7 @@
       const scale = Math.max(1, Math.floor(budget / totalW));
       const { base: fontPxBase, min: fontPxMin } = captionFontFromScale(scale, dpr);
       const textH = showText ? Math.round(16 * scale) : 0;
-      const barH = Math.max(30 * dpr, Math.min(budget - 16 * dpr - textH, Math.round(totalW * scale * 0.3)));
+      const barH = Math.max(30 * dpr, Math.min(budget - 16 * scale - textH, Math.round(totalW * scale * 0.3)));
       const contentW = totalW * scale;
       const contentH = barH + 16 * scale + textH;
 
@@ -1066,7 +1070,7 @@
           ctx.fillText(line, canvas.width / 2, startY + i * lineH, maxW);
         });
       }
-      lastDraw = { scale, qz, dpr, originX, originY };
+      lastDraw = { scale, qz, originX, originY };
       return;
     }
 
@@ -1389,6 +1393,9 @@
       params.set("ec", st.ec);
     } else if (std === "aztec") {
       params.set("ec", String(st.ec));
+    } else if (std === "pdf417") {
+      if (!st.ecAuto) params.set("ec", String(st.ec));
+      if (!st.colsAuto) params.set("ver", String(st.cols));
     }
 
     if (std === "rmqr") {
@@ -1415,29 +1422,40 @@
 
   const STANDARDS = ["qr", "micro", "rmqr", "datamatrix", "aztec", "barcode", "aztecrune", "pdf417"];
 
-  /* 起動時に URL のクエリパラメーターから状態を復元する。復元した規格名 (なければ null) を返す */
+  /* 起動時に URL のクエリパラメーターから状態を復元する。復元した規格名 (なければ null) を返す。
+     シェアリンクは第三者が加工した URL でも開かれうるため、各値は取りうる値
+     かどうかを検証し、不正値は黙って既定値のままにする。 */
   function loadFromUrl() {
     const params = new URLSearchParams(location.search);
     const std = params.get("std");
     if (!STANDARDS.includes(std)) return null;
 
+    const isHexColor = (v) => /^#[0-9a-fA-F]{6}$/.test(v || "");
     if (params.has("text")) dataInput.value = params.get("text");
-    if (params.has("fg")) state.fg = params.get("fg");
-    if (params.has("bg")) state.bg = params.get("bg");
-    if (params.has("obg")) state.outerBg = params.get("obg");
+    if (isHexColor(params.get("fg"))) state.fg = params.get("fg");
+    if (isHexColor(params.get("bg"))) state.bg = params.get("bg");
+    if (isHexColor(params.get("obg"))) state.outerBg = params.get("obg");
     state.outerSame = params.get("same") === "1";
-    if (params.has("split")) state.splitMode = params.get("split");
+    if (["simple", "structured"].includes(params.get("split"))) state.splitMode = params.get("split");
     state.showContent = params.get("content") === "1";
-    if (params.has("cplace")) state.contentPlacement = params.get("cplace");
-    $("color-fg").value = state.fg;
-    $("color-bg").value = state.bg;
-    $("color-outer").value = state.outerBg;
-    $("color-outer").disabled = state.outerSame;
-    $("color-outer-same").checked = state.outerSame;
+    if (["each", "combined", "both"].includes(params.get("cplace"))) state.contentPlacement = params.get("cplace");
+    syncColorInputs();
     $("show-content-toggle").checked = state.showContent;
 
     const st = state[std];
-    if (params.has("ec")) st.ec = std === "aztec" ? Number(params.get("ec")) : params.get("ec");
+    if (params.has("ec")) {
+      const ec = params.get("ec");
+      const valid = { qr: ["L", "M", "Q", "H"], micro: ["L", "M", "Q"], rmqr: ["M", "H"] }[std];
+      if (valid) {
+        if (valid.includes(ec)) st.ec = ec;
+      } else if (std === "aztec" || std === "pdf417") {
+        const n = Number(ec);
+        if (Number.isInteger(n) && n >= 0 && n <= (std === "aztec" ? 3 : 8)) {
+          st.ec = n;
+          if (std === "pdf417") st.ecAuto = false;
+        }
+      }
+    }
 
     if (std === "rmqr") {
       if (params.has("h") && params.has("w")) {
@@ -1454,23 +1472,25 @@
         }
       }
     } else if (params.has("ver")) {
-      const autoKey = std === "datamatrix" ? "sizeAuto" : "versionAuto";
       const ver = Number(params.get("ver"));
-      const maxVer = std === "qr" ? 40 : std === "micro" ? 4 : std === "datamatrix" ? DMLib.SIZES.length : 36;
-      if (Number.isInteger(ver) && ver >= 1 && ver <= maxVer) {
-        st[autoKey] = false;
-        if (std === "datamatrix") st.size = ver;
-        else st.version = ver;
+      const maxVer = { qr: 40, micro: 4, datamatrix: DMLib.SIZES.length, aztec: 36, pdf417: 30 }[std];
+      if (maxVer && Number.isInteger(ver) && ver >= 1 && ver <= maxVer) {
+        if (std === "datamatrix") { st.sizeAuto = false; st.size = ver; }
+        else if (std === "pdf417") { st.colsAuto = false; st.cols = ver; }
+        else { st.versionAuto = false; st.version = ver; }
       }
     }
 
     if ((std === "qr" || std === "micro") && params.has("mask")) {
-      st.maskAuto = false;
-      st.mask = Number(params.get("mask"));
+      const mask = Number(params.get("mask"));
+      if (Number.isInteger(mask) && mask >= 0 && mask <= (std === "qr" ? 7 : 3)) {
+        st.maskAuto = false;
+        st.mask = mask;
+      }
     }
 
     if (std === "barcode") {
-      if (params.has("sym")) st.symbology = params.get("sym");
+      if (BARCODE_SYMBOLOGIES.includes(params.get("sym"))) st.symbology = params.get("sym");
       if (params.has("btxt")) st.showText = params.get("btxt") !== "0";
     }
 
@@ -1486,16 +1506,22 @@
 
   qrImage.addEventListener("click", (ev) => {
     if (!current || !lastDraw || current.results.length !== 1 || !QR_FAMILY.includes(state.standard)) return;
-    const rect = canvas.getBoundingClientRect();
-    const { scale, qz, dpr, originX, originY } = lastDraw;
-    const x = Math.floor(((ev.clientX - rect.left) * dpr - originX) / scale) - qz;
-    const y = Math.floor(((ev.clientY - rect.top) * dpr - originY) / scale) - qz;
+    /* 画面に見えているのは canvas ではなく、その内容を写した #qr-image
+       (qr-card 全面に object-fit:contain で拡大表示される)。canvas と表示上の
+       大きさが一致しないため、クリック座標は img の矩形を基準に canvas の
+       デバイスピクセルへ換算する (canvas と img は常に同じ正方形なので比率は一定)。 */
+    const rect = qrImage.getBoundingClientRect();
+    const { scale, qz, originX, originY } = lastDraw;
+    const ratio = canvas.width / rect.width;
+    const x = Math.floor(((ev.clientX - rect.left) * ratio - originX) / scale) - qz;
+    const y = Math.floor(((ev.clientY - rect.top) * ratio - originY) / scale) - qz;
     const r = current.results[0];
     if (x < 0 || y < 0 || x >= r.width || y >= r.height) return;
     const modules = current.modulesList[0];
     modules[y][x] ^= 1;
     current.edited = modules.some((row, yy) =>
       row.some((v, xx) => v !== r.modules[yy][xx]));
+    current._decodedCache = null; // モジュールが変わったので復号結果キャッシュを破棄
     editReset.hidden = !current.edited;
     drawCurrent();
     renderInfo();
@@ -1505,6 +1531,7 @@
     if (!current || current.results.length !== 1) return;
     current.modulesList[0] = current.results[0].modules.map((row) => row.slice());
     current.edited = false;
+    current._decodedCache = null;
     editReset.hidden = true;
     drawCurrent();
     renderInfo();
@@ -2155,11 +2182,7 @@
     state.bg = "#ffffff";
     state.outerBg = "#e5e7eb";
     state.outerSame = true;
-    $("color-fg").value = state.fg;
-    $("color-bg").value = state.bg;
-    $("color-outer").value = state.outerBg;
-    $("color-outer").disabled = true;
-    $("color-outer-same").checked = true;
+    syncColorInputs();
     drawCurrent();
   });
 
@@ -2201,22 +2224,34 @@
     return null;
   }
 
-  function handleCustomDecodeResult(found, offCanvas) {
-    const { std, decoded, box } = found;
-    /* box はコード本体 (クワイエットゾーンを含まないモジュールぶんの矩形) なので、
-       その外側にクワイエットゾーンぶんの余白を確保した矩形を背景色抽出用に使う */
+  /* 色設定 UI (カラーピッカー等) を state の現在値に同期する */
+  function syncColorInputs() {
+    $("color-fg").value = state.fg;
+    $("color-bg").value = state.bg;
+    $("color-outer").value = state.outerBg;
+    $("color-outer").disabled = state.outerSame;
+    $("color-outer-same").checked = state.outerSame;
+  }
+
+  /* 読み取った画像から推定したコード本体色・背景色を状態と色UIへ反映する */
+  function applyScanColors(colors) {
+    if (!colors) return;
+    if (colors.fg) state.fg = colors.fg;
+    if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
+    syncColorInputs();
+  }
+
+  /* box はコード本体 (クワイエットゾーンを含まないモジュールぶんの矩形) なので、
+     その外側にクワイエットゾーンぶんの余白を確保した矩形を背景色抽出用に使う */
+  function scanColorsFromBox(offCanvas, box) {
     const inner = clampBox(offCanvas, box.x0, box.y0, box.w, box.h);
     const outer = clampBox(offCanvas, box.x0 - box.w * 0.2, box.y0 - box.h * 0.2, box.w * 1.4, box.h * 1.4);
-    const colors = sampleScanColorsDual(offCanvas, inner, outer);
-    if (colors) {
-      if (colors.fg) state.fg = colors.fg;
-      if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
-      $("color-fg").value = state.fg;
-      $("color-bg").value = state.bg;
-      $("color-outer").value = state.outerBg;
-      $("color-outer").disabled = state.outerSame;
-      $("color-outer-same").checked = state.outerSame;
-    }
+    return sampleScanColorsDual(offCanvas, inner, outer);
+  }
+
+  function handleCustomDecodeResult(found, offCanvas) {
+    const { std, decoded, box } = found;
+    applyScanColors(scanColorsFromBox(offCanvas, box));
     dataInput.value = decoded.text;
     if (std === "micro") {
       state.micro.versionAuto = false;
@@ -2240,18 +2275,7 @@
 
   function handleCustom1DResult(found, offCanvas) {
     const { symbology, text, box } = found;
-    const inner = clampBox(offCanvas, box.x0, box.y0, box.w, box.h);
-    const outer = clampBox(offCanvas, box.x0 - box.w * 0.2, box.y0 - box.h * 0.2, box.w * 1.4, box.h * 1.4);
-    const colors = sampleScanColorsDual(offCanvas, inner, outer);
-    if (colors) {
-      if (colors.fg) state.fg = colors.fg;
-      if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
-      $("color-fg").value = state.fg;
-      $("color-bg").value = state.bg;
-      $("color-outer").value = state.outerBg;
-      $("color-outer").disabled = state.outerSame;
-      $("color-outer-same").checked = state.outerSame;
-    }
+    applyScanColors(scanColorsFromBox(offCanvas, box));
     dataInput.value = text;
     state.barcode.symbology = symbology;
     setScanStatus(`読み取り成功 (${BARCODE_SYMBOLOGY_LABEL[symbology] || symbology})`);
@@ -2395,16 +2419,7 @@
     const format = result.getBarcodeFormat();
     const text = result.getText();
     const mapping = mapZXingFormat(format);
-    const colors = sampleScanColors(offCanvas, result.getResultPoints());
-    if (colors) {
-      if (colors.fg) state.fg = colors.fg;
-      if (colors.bg) { state.bg = colors.bg; state.outerBg = colors.bg; state.outerSame = true; }
-      $("color-fg").value = state.fg;
-      $("color-bg").value = state.bg;
-      $("color-outer").value = state.outerBg;
-      $("color-outer").disabled = state.outerSame;
-      $("color-outer-same").checked = state.outerSame;
-    }
+    applyScanColors(sampleScanColors(offCanvas, result.getResultPoints()));
     dataInput.value = text;
     if (mapping) {
       if (mapping.symbology) state.barcode.symbology = mapping.symbology;

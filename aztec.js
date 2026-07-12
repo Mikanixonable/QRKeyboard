@@ -479,6 +479,9 @@
     ];
     const descEcc = rsRemainder(GF16, descWords, 5);
     for (const v of descEcc) for (let i = 3; i >= 0; i--) desc.push((v >> i) & 1);
+    /* Annex A: コンパクトシンボルとの誤認を防ぐため、先頭から1つおきに
+       (偶数番目の) ビットを反転する */
+    for (let i = 0; i < desc.length; i += 2) desc[i] ^= 1;
     const descAt = (idx) => (idx < desc.length ? desc[idx] : 0);
 
     const dim = 11;
@@ -607,6 +610,8 @@
         if (v >= 2000) desc[v - 2000] = modules[y][x];
       }
     }
+    /* encodeRune の交互ビット反転 (Annex A) を元に戻す */
+    for (let i = 0; i < desc.length; i += 2) desc[i] ^= 1;
     const words = [];
     for (let i = 0; i < 7; i++) {
       words.push((desc[i * 4] << 3) | (desc[i * 4 + 1] << 2) | (desc[i * 4 + 2] << 1) | desc[i * 4 + 3]);

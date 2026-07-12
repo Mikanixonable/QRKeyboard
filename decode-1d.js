@@ -1,7 +1,7 @@
 /* Industrial 2 of 5 / Pharmacode 用の自前デコーダ (ZXing が非対応のため)。
  * ZXing と同じ二値化器で行列を作り、水平方向に複数の走査線を取って
  * バー/スペースのランレングス列に対しパターンマッチングする簡易実装。 */
-(function () {
+(function (global) {
   "use strict";
 
   const TOF5_DIGIT = [
@@ -29,76 +29,47 @@
   function classify(len, unit) { return len > unit * 1.5 ? "W" : "N"; }
   function withinTol(len, unit, tol) { return Math.abs(len - unit) <= unit * tol; }
 
-  /* encodeIndustrial2of5 (barcode1d.js) は各数字の最後のバーの直後のスペースを
-     省略するため、ある数字の最終バーと次の数字 (またはストップ) の先頭バーが
-     同色で隣接し、1本のランに融合することがある。そのため固定個数のランを
-     読み進める単純な走査ではなく、「現在のランのうち何ユニット分を消費済みか」
-     を保持するカーソルで、色とユニット数を指定しながら少しずつ消費していく。 */
-  function makeCursor(runs, unit, startRunIdx) {
-    if (startRunIdx >= runs.length) return null;
-    return { runs, unit, runIdx: startRunIdx, remaining: unitLen(runs[startRunIdx], unit) };
-  }
-  function unitLen(run, unit) { return Math.max(1, Math.round(run.len / unit)); }
-  /* exact=true の場合、そのランをちょうど使い切る (=ラン境界と一致する) 場合しか
-     消費を認めない。ストップパターンの末尾の狭バーなど「これ以上バーが続かない」
-     ことを検証したい箇所で使う (単に remaining>=n だけで許すと、実際には後続の
-     数字の太バーの先頭部分を誤ってストップと解釈してしまう)。 */
-  function consume(cursor, n, dark, exact) {
-    const { runs, unit, runIdx, remaining } = cursor;
-    if (runIdx >= runs.length || runs[runIdx].dark !== dark || remaining < n) return null;
-    if (exact && remaining !== n) return null;
-    const rest = remaining - n;
-    if (rest === 0) {
-      const nextIdx = runIdx + 1;
-      return { runs, unit, runIdx: nextIdx, remaining: nextIdx < runs.length ? unitLen(runs[nextIdx], unit) : 0 };
-    }
-    return { runs, unit, runIdx, remaining: rest };
-  }
-
-  /* スタート (狭バー,狭スペース,狭バー,狭スペース) -> 数字ごとに
-     (バー,スペース)x5 (バーのみが幅で情報を持ち、間のスペースは常に狭。ただし
-     最後のバーの後のスペースは省略される) -> ストップ (太バー,狭スペース,狭バー)。
-     encodeIndustrial2of5 (barcode1d.js) の逆変換。 */
+  /* スタート (太,太,狭バー) + 数字ごとの5バー + ストップ (太,狭,太バー)。
+     バーのみが情報を持ち、スペースは全て狭幅 (encodeIndustrial2of5 の逆変換)。
+     バーとスペースが必ず交互のランになるため、ラン列をそのまま突き合わせる。 */
   function decodeIndustrial2of5Row(runs) {
-    for (let startIdx = 0; startIdx + 7 <= runs.length; startIdx++) {
+    // 最小構成: スタート3 + 数字5 + ストップ3 = バー11本 + 間の狭スペース10 = 21ラン
+    for (let startIdx = 0; startIdx + 21 <= runs.length; startIdx++) {
       if (!runs[startIdx].dark) continue;
-      const startRuns = runs.slice(startIdx, startIdx + 4);
-      const unit = (startRuns[0].len + startRuns[1].len + startRuns[2].len + startRuns[3].len) / 4;
-      if (unit < 1) continue;
-      if (!startRuns.every((r) => withinTol(r.len, unit, 0.6))) continue;
+      const unit0 = runs[startIdx].len / 2; // スタート先頭は太バー (2ユニット)
+      if (unit0 < 1) continue;
 
-      let cursor = makeCursor(runs, unit, startIdx + 4);
-      let text = "";
-      while (cursor) {
-        let matched = null;
-        for (let d = 0; d <= 9; d++) {
-          const widths = TOF5_DIGIT[d].split("").map((c) => (c === "W" ? 2 : 1));
-          let c = cursor;
-          for (let k = 0; k < 5 && c; k++) {
-            c = consume(c, widths[k], true);
-            if (c && k < 4) c = consume(c, 1, false);
-          }
-          if (c) {
-            if (matched) { matched = "AMBIGUOUS"; break; }
-            matched = { digit: d, cursor: c };
-          }
-        }
-        if (!matched || matched === "AMBIGUOUS") break;
-        text += String(matched.digit);
-        cursor = matched.cursor;
-
-        /* ストップ (太バー,狭スペース,狭バー) は、数字の (バー2,スペース,バー1) と
-           ラン長だけでは区別できないため、消費後にコード本体の末尾 (最後のラン =
-           クワイエットゾーン) にちょうど到達しているかどうかで判定する */
-        let stopCursor = consume(cursor, 2, true, true);
-        stopCursor = stopCursor && consume(stopCursor, 1, false, true);
-        stopCursor = stopCursor && consume(stopCursor, 1, true, true);
-        if (stopCursor && stopCursor.runIdx >= runs.length - 1 && text.length > 0) {
-          const lastRunIdx = Math.min(stopCursor.runIdx, runs.length - 1);
-          const last = runs[lastRunIdx];
-          return { text, x0: runs[startIdx].start, x1: last.start + last.len };
+      /* シンボル範囲のラン収集: 狭幅でないスペース (クワイエットゾーン) か
+         バーとして不正な幅のランが現れたら終端 */
+      const bars = [];
+      const spaces = [];
+      for (let i = startIdx; i < runs.length; i++) {
+        const r = runs[i];
+        if (r.dark) {
+          if (!withinTol(r.len, unit0, 0.6) && !withinTol(r.len, unit0 * 2, 0.6)) break;
+          bars.push(r);
+        } else {
+          if (!withinTol(r.len, unit0, 0.6)) break;
+          spaces.push(r);
         }
       }
+      const n = bars.length;
+      if (n < 11 || (n - 6) % 5 !== 0) continue;
+
+      /* スペースは全て狭幅固定なので、その平均を基準幅にしてバーを分類する */
+      const unit = spaces.length ? spaces.reduce((sum, r) => sum + r.len, 0) / spaces.length : unit0;
+      const kinds = bars.map((r) => classify(r.len, unit)).join("");
+      if (!kinds.startsWith("WWN") || !kinds.endsWith("WNW")) continue;
+
+      let text = "";
+      for (let i = 3; i <= n - 8; i += 5) {
+        const digit = TOF5_LOOKUP[kinds.slice(i, i + 5)];
+        if (digit === undefined) { text = null; break; }
+        text += digit;
+      }
+      if (!text) continue;
+      const last = bars[n - 1];
+      return { text, x0: runs[startIdx].start, x1: last.start + last.len };
     }
     return null;
   }
@@ -176,5 +147,8 @@
     return null;
   }
 
-  window.Bar1DLib = { tryDecodeBarcode1D };
-})();
+  /* ロー単位のデコーダも公開する (ブラウザ外での単体テスト用) */
+  const Bar1DLib = { tryDecodeBarcode1D, decodeIndustrial2of5Row, decodePharmacodeRow };
+  if (typeof module !== "undefined" && module.exports) module.exports = Bar1DLib;
+  else global.Bar1DLib = Bar1DLib;
+})(typeof globalThis !== "undefined" ? globalThis : this);

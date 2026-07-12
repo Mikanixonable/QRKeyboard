@@ -493,27 +493,12 @@
 
   function encodeIndustrial2of5(text) {
     if (!/^\d+$/.test(text)) throw new BAREncodeError("INVALID_CHARS", "Industrial 2 of 5 は数字のみ使用できます");
-    let bits = "";
-    const put = (widths, bar) => {
-      let b = bar;
-      for (const w of widths) { bits += (b ? "1" : "0").repeat(w); b = !b; }
-      return b;
-    };
-    put([1, 1, 1, 1], true); // start: bar,space,bar,space (narrow x4)
-    for (const ch of text) {
-      const widths5 = tof5Widths(TOF5_DIGIT[ch.charCodeAt(0) - 48], 1, 2);
-      // 5エレメントはバーのみが情報を持つ (間のスペースは常に狭幅) ので、
-      // バー・狭スペースを交互に組み立てる
-      let b = true;
-      for (const w of widths5) {
-        bits += (b ? "1" : "0").repeat(w);
-        bits += "0"; // 固定狭スペース (このループでは常にバーの直後に置く)
-        b = true;
-      }
-      // 上のループは末尾に余分なスペースを付加するため補正
-      bits = bits.slice(0, bits.length - 1);
-    }
-    put([2, 1, 1], true); // stop: 太バー,狭スペース,狭バー
+    /* バーのみが情報を持ち、スペース (キャラクタ間ギャップ含む) は全て狭幅。
+       スタートは 太,太,狭、ストップは 太,狭,太 の3バー。 */
+    const bars = [2, 2, 1];
+    for (const ch of text) bars.push(...tof5Widths(TOF5_DIGIT[ch.charCodeAt(0) - 48], 1, 2));
+    bars.push(2, 1, 2);
+    const bits = bars.map((w) => "1".repeat(w)).join("0");
     return { bits, display: text, name: "Industrial 2 of 5", quietLeft: 10, quietRight: 10 };
   }
 
