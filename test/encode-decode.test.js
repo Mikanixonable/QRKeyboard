@@ -174,5 +174,68 @@ for (let c = 1; c <= 30; c++) {
   }
 }
 
+/* ===== ゴールデンテスト =====
+ * リファクタリングでエンコード結果 (モジュール配列) が変化していないことを検出する安全網。
+ * ハッシュは FNV-1a (32bit) で、モジュール配列を行ごとに "0"/"1" 連結し改行区切りにした
+ * 文字列から決定的に算出する。値が変わった場合は仕様変更が意図通りか確認すること。 */
+function hashModules(modules) {
+  const str = modules.map((row) => Array.from(row).join("")).join("\n");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+ok(hashModules(DMLib.encode({ text: "GOLDEN TEST 123", size: 0 }).modules) === "db70af2f", "Golden DM size=0");
+ok(hashModules(DMLib.encode({ text: "GOLDEN TEST 123", size: 5 }).modules) === "db70af2f", "Golden DM size=5");
+ok(hashModules(DMLib.encode({ text: "ゴールデンテスト", size: 0 }).modules) === "9b39b606", "Golden DM 日本語");
+
+ok(hashModules(AZLib.encode({ text: "GOLDEN AZTEC", ecIndex: 1, version: 0 }).modules) === "a850fe42", "Golden Aztec version=0");
+ok(hashModules(AZLib.encode({ text: "GOLDEN AZTEC", ecIndex: 1, version: 3 }).modules) === "ee35edd9", "Golden Aztec version=3");
+ok(hashModules(AZLib.encodeRune(123).modules) === "64a1de13", "Golden Aztec Rune 123");
+
+ok(hashModules(PDF417Lib.encode({ text: "GOLDEN PDF417", eccLevel: 2, cols: 4 }).modules) === "31a80867", "Golden PDF417 ecc=2 cols=4");
+ok(hashModules(PDF417Lib.encode({ text: "GOLDEN PDF417", eccLevel: null, cols: null }).modules) === "a762a829", "Golden PDF417 auto");
+
+const barGolden = [
+  ["ean13", "490123456789"],
+  ["upca", "03600029145"],
+  ["itf14", "1540014128876"],
+  ["gs1databar", "0001234567890"],
+  ["code128", "GOLDEN 123"],
+  ["code39", "GOLDEN 123"],
+  ["code93", "GOLDEN 123"],
+  ["itf", "12345678"],
+  ["industrial2of5", "12345678"],
+  ["pharmacode", "12345"],
+  ["upce", "0123457"],
+  ["codabar", "A123456B"],
+];
+const barGoldenHashes = {
+  ean13: "2d26b47e",
+  upca: "e8874423",
+  itf14: "5e4ed60f",
+  gs1databar: "321265b7",
+  code128: "b31d8b31",
+  code39: "6ef5df9d",
+  code93: "dbb5b1e0",
+  itf: "55b1b94c",
+  industrial2of5: "87b372d3",
+  pharmacode: "8728b585",
+  upce: "637c9e79",
+  codabar: "3d40593f",
+};
+for (const [sym, text] of barGolden) {
+  const r = BARLib.encode({ symbology: sym, text });
+  const h = hashModules(r.modules);
+  ok(h === barGoldenHashes[sym], `Golden BAR ${sym}`);
+}
+
+ok(hashModules(QRLib.encode({ standard: "qr", text: "GOLDEN QR", ecLevel: "M", version: 3, mask: 4 }).modules) === "c1a1ce9e", "Golden QR v3 M mask4");
+ok(hashModules(QRLib.encode({ standard: "micro", text: "GOLDEN", ecLevel: "L", version: 2, mask: 1 }).modules) === "a084915e", "Golden Micro M2 L mask1");
+ok(hashModules(QRLib.encode({ standard: "rmqr", text: "GOLDEN RMQR", ecLevel: "M", version: 10 }).modules) === "f10155cb", "Golden rMQR v10 M");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
