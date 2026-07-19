@@ -1567,6 +1567,50 @@
     return `code-${state.standard}`;
   }
 
+  /* キャプションフォントサイズの基準値・最小値を計算する共通ヘルパー */
+  function captionFontRange(scale) {
+    return { base: Math.max(14, Math.round(scale * 2.2)), min: Math.max(8, Math.round(scale)) };
+  }
+
+  /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、コード (+内容表示) は
+     その中央に配置される。書き出しもそれをそのまま再現する。
+     正方形にするために大きい方の辺に合わせるだけだと、既に元々ほぼ正方形の
+     コード (+わずかなキャプション) では上下 or 左右の余白がほぼ 0 になって
+     しまう (実際に発生していた不具合)。そこで常に一定の余白 (margin) を
+     四辺に確保した上で正方形化する。
+     半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
+     エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
+  function squareFrame(off, octx, contentW, contentH, outerColor) {
+    const margin = Math.round(Math.max(contentW, contentH) * MARGIN_RATIO);
+    const square = Math.max(contentW, contentH) + margin * 2;
+    off.width = square;
+    off.height = square;
+    octx.fillStyle = outerColor;
+    octx.fillRect(0, 0, off.width, off.height);
+    return { originX: Math.round((square - contentW) / 2), originY: Math.round((square - contentH) / 2) };
+  }
+
+  /* モジュール格子を描く共通ヘルパー */
+  function drawModuleGrid(octx, modules, w, h, qz, baseX, baseY, scale) {
+    octx.fillStyle = state.fg;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (modules[y][x]) octx.fillRect(baseX + (x + qz) * scale, baseY + (y + qz) * scale, scale, scale);
+      }
+    }
+  }
+
+  /* キャプションの帯を縦中央揃えで描く共通ヘルパー */
+  function drawCaptionBand(octx, lines, fontPx, centerX, maxW, bandTop, bandBottom) {
+    octx.font = `${fontPx}px monospace`;
+    octx.textAlign = "center";
+    octx.textBaseline = "top";
+    const lineH = Math.round(fontPx * 1.4);
+    const blockH = lines.length * lineH;
+    const startY = bandTop + (bandBottom - bandTop - blockH) / 2;
+    lines.forEach((line, i) => octx.fillText(line, centerX, startY + i * lineH, maxW));
+  }
+
   /* PNG 描画を save-png とクリップボードコピーの両方から使えるように切り出す */
   function renderPngCanvas() {
     const results = current.results;
@@ -1606,12 +1650,7 @@
       off.height = mh * scale;
       octx.fillStyle = state.bg;
       octx.fillRect(0, 0, off.width, off.height);
-      octx.fillStyle = state.fg;
-      for (let y = 0; y < r.height; y++) {
-        for (let x = 0; x < r.width; x++) {
-          if (current.modulesList[0][y][x]) octx.fillRect((x + qz) * scale, (y + qz) * scale, scale, scale);
-        }
-      }
+      drawModuleGrid(octx, current.modulesList[0], r.width, r.height, qz, 0, 0, scale);
     } else if (state.saveScope === "full") {
       renderFullMultiCanvas(off, octx);
     } else {
@@ -1626,18 +1665,13 @@
       off.height = rows * cellH + (rows - 1) * gap;
       octx.fillStyle = state.bg;
       octx.fillRect(0, 0, off.width, off.height);
-      octx.fillStyle = state.fg;
       results.forEach((r, i) => {
         const qz = r.quietZone;
         const col = i % cols, row = Math.floor(i / cols);
         const baseX = col * (cellW + gap) + (cellW - dims[i].mw * scale) / 2;
         const baseY = row * (cellH + gap) + (cellH - dims[i].mh * scale) / 2;
         const modules = current.modulesList[i];
-        for (let y = 0; y < r.height; y++) {
-          for (let x = 0; x < r.width; x++) {
-            if (modules[y][x]) octx.fillRect(baseX + (x + qz) * scale, baseY + (y + qz) * scale, scale, scale);
-          }
-        }
+        drawModuleGrid(octx, modules, r.width, r.height, qz, baseX, baseY, scale);
       });
     }
     return off;
@@ -1653,8 +1687,7 @@
     const outerColor = state.outerSame ? state.bg : state.outerBg;
     const totalW = r.quietLeft + r.width + r.quietRight;
     const scale = 4;
-    const fontPxBase = Math.max(14, Math.round(scale * 2.2));
-    const fontPxMin = Math.max(8, Math.round(scale));
+    const { base: fontPxBase, min: fontPxMin } = captionFontRange(scale);
 
     const barH = Math.max(120, Math.round(totalW * scale * 0.3));
     const textH = showText ? 48 : 0;
@@ -1671,15 +1704,8 @@
       captionH = lines.length * lineH + 12;
     }
     const blockH = contentH + captionH;
-    const margin = Math.round(Math.max(contentW, blockH) * MARGIN_RATIO);
-    const square = Math.max(contentW, blockH) + margin * 2;
-    off.width = square;
-    off.height = square;
-    const originX = Math.round((square - contentW) / 2);
-    const originY = Math.round((square - blockH) / 2);
+    const { originX, originY } = squareFrame(off, octx, contentW, blockH, outerColor);
 
-    octx.fillStyle = outerColor;
-    octx.fillRect(0, 0, off.width, off.height);
     octx.fillStyle = state.bg;
     octx.fillRect(originX, originY, contentW, contentH);
     octx.fillStyle = state.fg;
@@ -1693,16 +1719,8 @@
       octx.fillText(r.display, originX + contentW / 2, originY + barH + 24, contentW);
     }
     if (showCaption) {
-      octx.font = `${captionFontPx}px monospace`;
-      octx.textAlign = "center";
-      octx.textBaseline = "top";
-      const lineH = Math.round(captionFontPx * 1.4);
-      const maxW = off.width - 16;
-      const textBlockH = lines.length * lineH;
-      const contentBottom = originY + contentH;
-      const bandH = off.height - contentBottom;
-      const startY = contentBottom + (bandH - textBlockH) / 2;
-      lines.forEach((line, i) => octx.fillText(line, off.width / 2, startY + i * lineH, maxW));
+      /* コンテンツ下端から表示域 (正方形) 下端までの帯の縦中央に文字ブロックが来るようにする */
+      drawCaptionBand(octx, lines, captionFontPx, off.width / 2, off.width - 16, originY + contentH, off.height);
     }
   }
 
@@ -1716,8 +1734,7 @@
     const scale = pngScaleForSingle(mw, mh);
     const outerColor = state.outerSame ? state.bg : state.outerBg;
     const showCaption = effectivePlacement() === "each";
-    const fontPxBase = Math.max(14, Math.round(scale * 2.2));
-    const fontPxMin = Math.max(8, Math.round(scale));
+    const { base: fontPxBase, min: fontPxMin } = captionFontRange(scale);
     let lines = [], captionFontPx = fontPxBase, captionH = 0;
     if (showCaption) {
       const maxW = Math.max(20, mw * scale - 16);
@@ -1727,45 +1744,15 @@
       const lineH = Math.round(captionFontPx * 1.4);
       captionH = lines.length * lineH + 12;
     }
-    /* WebUI 上の QR 表示域 (.qr-card) は常に正方形で、コード (+内容表示) は
-       その中央に配置される。書き出しもそれをそのまま再現する。
-       正方形にするために大きい方の辺に合わせるだけだと、既に元々ほぼ正方形の
-       コード (+わずかなキャプション) では上下 or 左右の余白がほぼ 0 になって
-       しまう (実際に発生していた不具合)。そこで常に一定の余白 (margin) を
-       四辺に確保した上で正方形化する。 */
     const contentW = mw * scale, contentH = mh * scale + captionH;
-    const margin = Math.round(Math.max(contentW, contentH) * MARGIN_RATIO);
-    const square = Math.max(contentW, contentH) + margin * 2;
-    off.width = square;
-    off.height = square;
-    /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
-       エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
-    const originX = Math.round((square - contentW) / 2);
-    const originY = Math.round((square - contentH) / 2);
-    octx.fillStyle = outerColor;
-    octx.fillRect(0, 0, off.width, off.height);
+    const { originX, originY } = squareFrame(off, octx, contentW, contentH, outerColor);
     octx.fillStyle = state.bg;
     octx.fillRect(originX, originY, mw * scale, mh * scale);
-    octx.fillStyle = state.fg;
     const modules = current.modulesList[0];
-    for (let y = 0; y < r.height; y++) {
-      for (let x = 0; x < r.width; x++) {
-        if (modules[y][x]) octx.fillRect(originX + (x + qz) * scale, originY + (y + qz) * scale, scale, scale);
-      }
-    }
+    drawModuleGrid(octx, modules, r.width, r.height, qz, originX, originY, scale);
     if (showCaption) {
-      octx.font = `${captionFontPx}px monospace`;
-      octx.textAlign = "center";
-      octx.textBaseline = "top";
-      const lineH = Math.round(captionFontPx * 1.4);
-      const maxW = contentW - 16;
-      const blockH = lines.length * lineH;
-      /* クワイエットゾーン下端から表示域 (正方形) 下端までの帯の縦中央に
-         文字ブロックが来るようにする */
-      const qzBottom = originY + mh * scale;
-      const bandH = off.height - qzBottom;
-      const startY = qzBottom + (bandH - blockH) / 2;
-      lines.forEach((line, i) => octx.fillText(line, originX + contentW / 2, startY + i * lineH, maxW));
+      /* クワイエットゾーン下端から表示域 (正方形) 下端までの帯の縦中央に文字ブロックが来るようにする */
+      drawCaptionBand(octx, lines, captionFontPx, originX + contentW / 2, contentW - 16, originY + mh * scale, off.height);
     }
   }
 
@@ -1784,8 +1771,7 @@
     const showCaptions = placement === "each" || placement === "both";
     const showCombined = placement === "combined" || placement === "both";
 
-    const cellFontPxBase = Math.max(14, Math.round(scale * 2.2));
-    const cellFontPxMin = Math.max(8, Math.round(scale));
+    const { base: cellFontPxBase, min: cellFontPxMin } = captionFontRange(scale);
     let cellFontPx = cellFontPxBase;
     let cellLines = [];
     if (showCaptions) {
@@ -1807,8 +1793,7 @@
     const captionH = showCaptions ? maxCellLines * cellLineH + 8 : 0;
     const totalGridW = cols * cellW + (cols - 1) * gap;
 
-    const combinedFontPxBase = Math.max(14, Math.round(scale * 2.2));
-    const combinedFontPxMin = Math.max(8, Math.round(scale));
+    const { base: combinedFontPxBase, min: combinedFontPxMin } = captionFontRange(scale);
     const combinedRaw = combinedContentText();
     const combinedFit = showCombined
       ? fitCaptionLines(octx, combinedRaw == null ? "(読み取り不能)" : combinedRaw, totalGridW - 16, 3, combinedFontPxBase, combinedFontPxMin)
@@ -1823,16 +1808,7 @@
        配置される。書き出しもそれをそのまま再現する。常に一定の余白 (margin) を
        四辺に確保した上で正方形化する (単一コードの場合と同じ理由)。 */
     const contentW = totalGridW, contentH = gridH + combinedH;
-    const margin = Math.round(Math.max(contentW, contentH) * MARGIN_RATIO);
-    const square = Math.max(contentW, contentH) + margin * 2;
-    off.width = square;
-    off.height = square;
-    /* 半端な小数ピクセルで矩形を描くと、隣接するモジュール同士の境界がアンチ
-       エイリアスされ、灰色の格子状の線が入ってしまう。整数ピクセルに丸める。 */
-    const originX = Math.round((square - contentW) / 2);
-    const originY = Math.round((square - contentH) / 2);
-    octx.fillStyle = outerColor;
-    octx.fillRect(0, 0, off.width, off.height);
+    const { originX, originY } = squareFrame(off, octx, contentW, contentH, outerColor);
     results.forEach((r, i) => {
       const qz = r.quietZone;
       const col = i % cols, row = Math.floor(i / cols);
@@ -1842,42 +1818,18 @@
       const offY = Math.round(cellY + (cellH - dims[i].mh * scale) / 2);
       octx.fillStyle = state.bg;
       octx.fillRect(offX, offY, dims[i].mw * scale, dims[i].mh * scale);
-      octx.fillStyle = state.fg;
       const modules = current.modulesList[i];
-      for (let y = 0; y < r.height; y++) {
-        for (let x = 0; x < r.width; x++) {
-          if (modules[y][x]) octx.fillRect(offX + (x + qz) * scale, offY + (y + qz) * scale, scale, scale);
-        }
-      }
+      drawModuleGrid(octx, modules, r.width, r.height, qz, offX, offY, scale);
       if (showCaptions) {
-        octx.font = `${cellFontPx}px monospace`;
-        octx.textAlign = "center";
-        octx.textBaseline = "top";
-        const maxW = cellW - 4;
-        const blockH = cellLines[i].length * cellLineH;
         /* このコードのクワイエットゾーン下端からセル (キャプション込み) 下端までの
            帯の縦中央に文字ブロックが来るようにする */
         const qzBottom = offY + dims[i].mh * scale;
-        const bandH = cellY + cellH + captionH - qzBottom;
-        const startY = qzBottom + (bandH - blockH) / 2;
-        cellLines[i].forEach((line, li) => {
-          octx.fillText(line, cellX + cellW / 2, startY + li * cellLineH, maxW);
-        });
+        drawCaptionBand(octx, cellLines[i], cellFontPx, cellX + cellW / 2, cellW - 4, qzBottom, cellY + cellH + captionH);
       }
     });
     if (showCombined) {
-      octx.font = `${combinedFontPx}px monospace`;
-      octx.textAlign = "center";
-      octx.textBaseline = "top";
-      const maxW = contentW - 16;
-      const blockH = combinedLines.length * combinedLineH;
       /* グリッド下端から表示域 (正方形) 下端までの帯の縦中央に文字ブロックが来るようにする */
-      const gridBottom = originY + gridH;
-      const bandH = off.height - gridBottom;
-      const startY = gridBottom + (bandH - blockH) / 2;
-      combinedLines.forEach((line, li) => {
-        octx.fillText(line, originX + contentW / 2, startY + li * combinedLineH, maxW);
-      });
+      drawCaptionBand(octx, combinedLines, combinedFontPx, originX + contentW / 2, contentW - 16, originY + gridH, off.height);
     }
   }
 
