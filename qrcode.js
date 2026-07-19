@@ -574,6 +574,12 @@
   }
 
   /* マスク評価 (ISO/IEC 18004 §7.8.3) — 小さいほど良い */
+  /* マスク評価ペナルティ係数 (ISO/IEC 18004 §7.8.3.1 表21) */
+  const PENALTY_N1 = 3;  // 条件1: 同色連続 (5モジュール以上) の基礎点
+  const PENALTY_N2 = 3;  // 条件2: 2x2 同色ブロック1つあたり
+  const PENALTY_N3 = 40; // 条件3: ファインダ類似パターン1つあたり
+  const PENALTY_N4 = 10; // 条件4: 暗モジュール比率の50%からの乖離 (5%刻み)
+
   function qrPenalty(M) {
     const size = M.width;
     const get = (x, y) => M.get(x, y);
@@ -588,9 +594,9 @@
           const c = axis === 0 ? get(b, a) : get(a, b);
           if (c === prev) {
             run++;
-            if (b === size - 1 && run >= 5) score += 3 + (run - 5);
+            if (b === size - 1 && run >= 5) score += PENALTY_N1 + (run - 5);
           } else {
-            if (run >= 5) score += 3 + (run - 5);
+            if (run >= 5) score += PENALTY_N1 + (run - 5);
             prev = c;
             run = 1;
           }
@@ -601,7 +607,7 @@
     for (let y = 0; y < size - 1; y++) {
       for (let x = 0; x < size - 1; x++) {
         const c = get(x, y);
-        if (c === get(x + 1, y) && c === get(x, y + 1) && c === get(x + 1, y + 1)) score += 3;
+        if (c === get(x + 1, y) && c === get(x, y + 1) && c === get(x + 1, y + 1)) score += PENALTY_N2;
       }
     }
     // 条件3: 1:1:3:1:1 パターンの前後に幅4の明パターン
@@ -623,15 +629,15 @@
           for (let k = 7; lightAfter && k < 11; k++) {
             if (axis === 0 ? get(b + k, a) : get(a, b + k)) lightAfter = false;
           }
-          if (lightBefore) score += 40;
-          if (lightAfter) score += 40;
+          if (lightBefore) score += PENALTY_N3;
+          if (lightAfter) score += PENALTY_N3;
         }
       }
     }
     // 条件4: 暗モジュール比率の 50% からの乖離
     let dark = 0;
     for (let i = 0; i < M.dark.length; i++) dark += M.dark[i];
-    score += 10 * Math.floor(Math.abs((dark * 100) / (size * size) - 50) / 5);
+    score += PENALTY_N4 * Math.floor(Math.abs((dark * 100) / (size * size) - 50) / 5);
     return score;
   }
 

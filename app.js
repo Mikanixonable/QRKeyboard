@@ -15,6 +15,22 @@
   const MODE_NAMES = { numeric: "数字", alphanumeric: "英数字", byte: "バイト (UTF-8)" };
   const QR_FAMILY = ["qr", "micro", "rmqr"];
 
+  /* PNG 書き出し時の拡大率算出用の定数。長辺が PNG_TARGET_PX 程度になるように
+     scale を決め、PNG_SCALE_MAX を上限、単一コードは PNG_SCALE_MIN_SINGLE、
+     複数コード (グリッド配置) は PNG_SCALE_MIN_MULTI を下限とする。 */
+  const PNG_TARGET_PX = 2048;
+  const PNG_SCALE_MIN_SINGLE = 4;
+  const PNG_SCALE_MIN_MULTI = 2;
+  const PNG_SCALE_MAX = 16;
+  /* 単一コード用: モジュール数 (クワイエットゾーン込み) の長辺から scale を決める */
+  function pngScaleForSingle(mw, mh) {
+    return Math.max(PNG_SCALE_MIN_SINGLE, Math.min(PNG_SCALE_MAX, Math.floor(PNG_TARGET_PX / Math.max(mw, mh))));
+  }
+  /* 複数コード (グリッド配置) 用: 1セルのモジュール数の長辺 × グリッド数から scale を決める */
+  function pngScaleForMulti(maxMw, maxMh, cols, rows) {
+    return Math.max(PNG_SCALE_MIN_MULTI, Math.min(PNG_SCALE_MAX, Math.floor(PNG_TARGET_PX / (Math.max(maxMw, maxMh) * Math.max(cols, rows)))));
+  }
+
   /* 高さ×幅 -> バージョン番号 (1 始まり) の索引を一度だけ構築する */
   let rmqrIndex = null;
   function getRmqrIndex() {
@@ -1585,7 +1601,7 @@
       const r = results[0];
       const qz = r.quietZone;
       const mw = r.width + qz * 2, mh = r.height + qz * 2;
-      const scale = Math.max(4, Math.min(16, Math.floor(2048 / Math.max(mw, mh))));
+      const scale = pngScaleForSingle(mw, mh);
       off.width = mw * scale;
       off.height = mh * scale;
       octx.fillStyle = state.bg;
@@ -1603,7 +1619,7 @@
       const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
       const maxMw = Math.max(...dims.map((d) => d.mw));
       const maxMh = Math.max(...dims.map((d) => d.mh));
-      const scale = Math.max(2, Math.min(16, Math.floor(2048 / (Math.max(maxMw, maxMh) * Math.max(cols, rows)))));
+      const scale = pngScaleForMulti(maxMw, maxMh, cols, rows);
       const gap = 4 * scale;
       const cellW = maxMw * scale, cellH = maxMh * scale;
       off.width = cols * cellW + (cols - 1) * gap;
@@ -1697,7 +1713,7 @@
     const r = current.results[0];
     const qz = r.quietZone;
     const mw = r.width + qz * 2, mh = r.height + qz * 2;
-    const scale = Math.max(4, Math.min(16, Math.floor(2048 / Math.max(mw, mh))));
+    const scale = pngScaleForSingle(mw, mh);
     const outerColor = state.outerSame ? state.bg : state.outerBg;
     const showCaption = effectivePlacement() === "each";
     const fontPxBase = Math.max(14, Math.round(scale * 2.2));
@@ -1760,7 +1776,7 @@
     const dims = results.map((r) => ({ mw: r.width + r.quietZone * 2, mh: r.height + r.quietZone * 2 }));
     const maxMw = Math.max(...dims.map((d) => d.mw));
     const maxMh = Math.max(...dims.map((d) => d.mh));
-    const scale = Math.max(2, Math.min(16, Math.floor(2048 / (Math.max(maxMw, maxMh) * Math.max(cols, rows)))));
+    const scale = pngScaleForMulti(maxMw, maxMh, cols, rows);
     const gap = 4 * scale;
     const cellW = maxMw * scale, cellH = maxMh * scale;
     const outerColor = state.outerSame ? state.bg : state.outerBg;
@@ -2717,7 +2733,9 @@
       else desktopParent.insertBefore(el, desktopNextSibling);
     };
   }
-  const mobileMq = window.matchMedia("(max-width: 760px)");
+  /* style.css のメディアクエリ (max-width: 760px) と同期必須 */
+  const MOBILE_MAX_WIDTH_PX = 760;
+  const mobileMq = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH_PX}px)`);
   const responsiveMovers = [
     makeResponsiveMover($("info-field"), $("right-menu-info-panel")),
     makeResponsiveMover($("color-field"), $("right-menu-color-panel")),

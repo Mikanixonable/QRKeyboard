@@ -866,7 +866,8 @@ textarea:focus, select:focus, input:focus-visible,
    デスクトップは3ゾーンを横並び・site-body 内スクロールで「1画面完結」を
    狙うが、モバイル幅ではその前提が成立しないため、上から
    左メニュー(規格選択)→中央(データ入力・コード表示)→右メニュー(詳細設定)
-   の縦1カラムに組み替え、ページ全体を素直に縦スクロールさせる。 */
+   の縦1カラムに組み替え、ページ全体を素直に縦スクロールさせる。
+   app.js の MOBILE_MAX_WIDTH_PX と同期 */
 @media (max-width: 760px) {
   body { font-size: 13px; }
   .site-body {
