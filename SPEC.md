@@ -30,6 +30,13 @@ UPC-E・Codabar はエンコード実装のみ存在し UI 未公開。
 
 モバイル (幅760px以下) では左メニューゾーンが上部バー (規格プルダウン + 読取プルダウン) になり、「外観」「諸元」は右メニューのタブへ移動する。
 
+### モーション・マテリアル (apple-design 準拠)
+
+- **押下フィードバック**: ボタン類 (タブ・セグメント・タイル・小ボタン・プルダウン) は `:active` の瞬間に `scale(0.96)` で縮む (押下 60ms / 復帰 220ms のスプリング風イージング `--ease-spring`)。色・影の遷移は 150ms。
+- **プルダウンパネル** (`quick-combo-panel`): 半透明マテリアル (`backdrop-filter: blur`) + 深めの影。開くときは呼び出し元ボタンを `transform-origin` として scale+opacity で出現 (220ms)。規格側は左上、読取側は右上が原点。
+- **テーマ切替**: 背景色・文字色を 250ms でクロスフェードし、明度の急激なジャンプを避ける。
+- **アクセシビリティ**: `prefers-reduced-motion` で scale 系モーションを無効化 (色・影の遷移は維持)、`prefers-reduced-transparency` / `prefers-contrast: more` で半透明パネルを不透明化 (高コントラスト時は輪郭線を追加)。
+
 ## 規格ごとの設定項目
 
 - **誤り訂正**: QR (L/M/Q/H)、Micro QR (L/M/Q、型番により制限)、rMQR (M/H)、Aztec (10/23/36/50%)、PDF417 (自動/0〜8)。DataMatrix は ECC 200 固定。バーコード・Aztec Rune は非表示。

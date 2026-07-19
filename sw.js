@@ -3,7 +3,7 @@
  * アプリ本体一式と外部ライブラリ (ZXing・Webフォント) をキャッシュする。
  * キャッシュ優先 + バックグラウンド更新 (stale-while-revalidate) 方式。
  * 依存ファイルを追加/変更したら CACHE_VERSION を上げてキャッシュを世代交代させる。 */
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = "qrkeyboard-" + CACHE_VERSION;
 
 const APP_SHELL = [

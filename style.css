@@ -28,6 +28,11 @@
   --neu-raised-sm: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
   --neu-inset: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
   --neu-inset-sm: inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light);
+  /* Apple 流モーションの共通イージング (Designing Fluid Interfaces の
+     critically damped spring を CSS で近似したもの)。押下フィードバックは
+     ~100ms、通常の状態遷移は ~200ms を目安とする。 */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-scale: 0.96;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --bg: #3c4149; --surface: #3c4149; --surface-white: #484e57; --text: #eceef0; --text-sub: #9aa0a8; --border: #565c66; --accent: #f2954f; --accent-weak: #47331f; --accent2: #e08a3c; --accent2-weak: #3c2b18; --accent3: #d9731f; --accent3-weak: #362413; --danger: #e57368; --shadow-dark: #292d33; --shadow-light: #4c525c; }
@@ -91,6 +96,29 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ---------- モーション基盤 (apple-design) ----------
+   ボタン類は pointer-down の瞬間に縮む即時フィードバック (:active) を返し、
+   離すと spring 風イージングで戻る。transform / opacity のみをアニメーション
+   させ、コンポジタで処理できるようにする。色・影の遷移は控えめな 150ms。 */
+.seg-btn, .tab, .tile, .small-button, .left-mode-btn, .right-menu-tab-btn,
+.quick-combo-btn, .quick-combo-option {
+  transition:
+    transform 220ms var(--ease-spring),
+    color 150ms ease-out,
+    background-color 150ms ease-out,
+    box-shadow 150ms ease-out;
+  will-change: transform;
+}
+.seg-btn:active:not(:disabled), .tab:active, .tile:active:not(:disabled),
+.small-button:active, .left-mode-btn:active, .right-menu-tab-btn:active,
+.quick-combo-btn:active, .quick-combo-option:active {
+  transform: scale(var(--press-scale));
+  transition-duration: 60ms; /* 押下は即時、復帰はゆっくり */
+}
+
+/* テーマ切替 (ライト/ダーク) の明度ジャンプを緩和する */
+body { transition: background-color 250ms ease, color 250ms ease; }
+
 /* display 指定を持つ要素でも hidden 属性を必ず優先する */
 [hidden] { display: none !important; }
 
@@ -106,6 +134,7 @@ body {
   font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  font-optical-sizing: auto;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
            env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
@@ -204,14 +233,27 @@ body {
   max-height: min(85vh, calc(100dvh - 56px));
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--surface);
+  /* 浮遊する大きめの面 = 半透明マテリアル (blur) + 深めの影で「厚み」を出す */
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
   border: none;
   border-radius: var(--radius);
   padding: 6px;
-  box-shadow: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 呼び出し元 (トリガーボタン) から生えてくるように見せる。
+     単なるフェードではなく scale も同時に動かして「マテリアルの到着」にする */
+  transform-origin: top center;
+  animation: combo-materialize 220ms var(--ease-spring);
+}
+#standard-combo .quick-combo-panel { transform-origin: top left; }
+#decode-combo .quick-combo-panel { transform-origin: top right; }
+@keyframes combo-materialize {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 .quick-combo-panel[hidden] { display: none; }
 /* 折りたたみボタン自体は横並びの片側 (flex:1) の幅しかないため、展開時は
@@ -1029,4 +1071,39 @@ textarea:focus, select:focus, input:focus-visible,
 /* 高さの低い横向きモバイルなど */
 @media (max-height: 460px) {
   .left-menu-zone { padding: 4px 12px 2px; }
+}
+
+/* ---------- アクセシビリティ: モーション/透過の抑制 (apple-design) ----------
+   reduced-motion は「モーションなし」ではなく「前庭刺激のない同等表現」。
+   スライド・スケール・スプリングは短いフェード等に置き換え、
+   理解を助ける色・不透明度の変化は残す。 */
+@media (prefers-reduced-motion: reduce) {
+  .seg-btn, .tab, .tile, .small-button, .left-mode-btn, .right-menu-tab-btn,
+  .quick-combo-btn, .quick-combo-option {
+    transition: color 150ms ease-out, background-color 150ms ease-out, box-shadow 150ms ease-out;
+  }
+  .seg-btn:active:not(:disabled), .tab:active, .tile:active:not(:disabled),
+  .small-button:active, .left-mode-btn:active, .right-menu-tab-btn:active,
+  .quick-combo-btn:active, .quick-combo-option:active { transform: none; }
+  .quick-combo-panel { animation: none; }
+  body { transition: none; }
+}
+
+/* 透過抑制: 半透明マテリアルを不透明に落とし、blur を外す */
+@media (prefers-reduced-transparency: reduce) {
+  .quick-combo-panel {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* 高コントラスト: 浮遊面には明確な輪郭線を与える */
+@media (prefers-contrast: more) {
+  .quick-combo-panel {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px solid var(--text-sub);
+  }
 }
