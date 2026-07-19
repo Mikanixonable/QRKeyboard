@@ -436,12 +436,7 @@ body {
   gap: 10px;
 }
 
-/* 中央上・中央中・中央下 */
-.content-top {
-  display: flex;
-  gap: 12px;
-}
-.content-top > .field { flex: 1; min-width: 0; }
+/* 中央中・中央下 */
 .content-middle {
   flex: 1;
   min-height: 0;
@@ -474,7 +469,7 @@ body {
 
 /* ---------- 入力コントロール ---------- */
 .field { display: flex; flex-direction: column; gap: 5px; }
-.field > label, .field > .field-label {
+.field > label {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--text-sub);
@@ -949,9 +944,6 @@ textarea:focus, select:focus, input:focus-visible,
     padding: 4px 12px;
     gap: 8px;
   }
-
-  /* データ・色は縦並びに */
-  .content-top { flex-direction: column; gap: 8px; }
 
   /* QR 表示域は残り高さを埋めるのではなく、幅基準の正方形として確保する。
      縦幅節約のため、デスクトップ相当 (420px) の6割程度に縮小する。

@@ -359,6 +359,9 @@
   }
 
   /* ===== UPC-E (ゼロサプレス) ===== */
+  /* 注: UPC-E と Codabar はエンコード実装済みだが、ZXing での読み取り検証が
+     取れていないため UI (app.js) には接続していない (CLAUDE.md 参照)。
+     テスト (test/encode-decode.test.js) では出力を固定している。 */
   /* GS1 General Specifications の UPC-E 展開規則。末尾桁により
      11桁の UPC-A ボディへ展開する。 */
   function upcEExpand(ns, d) {
