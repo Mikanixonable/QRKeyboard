@@ -1,6 +1,8 @@
 # リファクタリング計画
 
-**進捗 (2026-07-20)**: フェーズ 5 (6264e60) → 1 (47ad0da) → 2 (bea501c) 実施済み。残りはフェーズ 3 と(要判断の)フェーズ 4。
+**進捗 (2026-07-20)**: 全フェーズ実施済み。5 (6264e60) → 1 (47ad0da) → 2 (bea501c) → 3 (04369db) → 4。
+フェーズ 3 の判断メモ: PNG 描画は captionFontRange / squareFrame / drawModuleGrid / drawCaptionBand に集約 (-48行)。build*Control 系は makeTileGrid が既に共通化されており追加統合は複雑化と判断し見送り。画面描画 (drawCurrentToCanvas) と PNG 描画の統合も要件差 (dpr・リアルタイム) から見送り。
+フェーズ 4 の判断メモ: 計画の 5 ファイル完全分割は、共有可変状態 (state/current) の全面書き換えを伴い UI 自動テストが無い現状ではリスク過大と判断。代わりに状態非依存の純粋ヘルパー 19 関数を app-util.js (AppUtil) に分離し、app.js 側は分割代入で呼び出し名を維持する保守的分割を実施 (app.js: 2758→2465 行)。mapZXingFormat は zxingAvailable (app.js の状態) に依存するため残置。完全分割を行う場合はブラウザ UI テスト整備後に再検討する。
 フェーズ 1 の判断メモ: UPC-E/Codabar はコメント明示で維持。ライブラリの未使用公開プロパティ (XxxEncodeError, サイズ表) も API 対称性のため維持。HTML の label id 群は aria-labelledby/CSS から参照されており未使用ではない。
 
 このプロジェクトのコードを段階的に整理するための計画。**各フェーズは独立してコミットでき、動作を変えない**ことを原則とする。各フェーズ完了ごとに `node test/encode-decode.test.js` を実行し、UI に触れるフェーズではブラウザで手動確認する(CLAUDE.md 参照)。
