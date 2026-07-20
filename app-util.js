@@ -192,6 +192,12 @@
     return out;
   }
 
+  /* 要素の中身が縦方向にはみ出しているか (スクロールが必要な状態か) を判定する。
+     ±1px は罫線・端数丸めによる誤差として許容する。 */
+  function elementOverflows(el) {
+    return !!el && el.scrollHeight > el.clientHeight + 1;
+  }
+
   /* 矩形領域の座標をキャンバス範囲内に丸める */
   function clampBox(offCanvas, x0, y0, w, h) {
     const cx0 = Math.max(0, Math.floor(x0));
@@ -300,6 +306,7 @@
     captionFontRange,
     drawCaptionBand,
     scaleCanvasTo,
+    elementOverflows,
     clampBox,
     sampleScanColorsDual,
     sampleScanColors,

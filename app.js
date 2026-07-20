@@ -2308,6 +2308,7 @@
     if (source) $("standard-combo-current").innerHTML = source.querySelector(".tab-rich-main").innerHTML;
     rebuildControls();
     render();
+    updateSideMenuWidth();
   }
 
   for (const tab of document.querySelectorAll(".tab")) {
@@ -2404,6 +2405,7 @@
     }
     encodePanel.hidden = mode === "decode";
     decodePanel.hidden = mode !== "decode";
+    updateSideMenuWidth();
   }
   for (const btn of document.querySelectorAll(".left-mode-btn")) {
     btn.addEventListener("click", () => setLeftMode(btn.dataset.mode));
@@ -2441,6 +2443,43 @@
   }
   mobileMq.addEventListener("change", applyResponsiveMovers);
   applyResponsiveMovers();
+
+  /* 左右メニューゾーンの幅可変化 (style.css の .site-body.side-menus-wide 参照)。
+     規格やモードによって縦幅の必要量が変わるため、そのままだと縦スクロールが
+     出る場合だけ左右メニューを広げて2列組みにし、縦幅を圧縮する。
+     判定は必ず「拡張前 (1カラム)」の状態で行う: 拡張後に測ると既にはみ出しが
+     解消されているため「戻す判定」ができず、広い⇔狭いを行き来する発振の
+     原因になる。そのため一旦 side-menus-wide を外して強制的にリフローさせて
+     から scrollHeight を測り、それを根拠に付け外しを決める。
+     十分な横幅が無ければ (モバイル、またはデスクトップでも中央カラムが
+     窮屈になる程度に狭い場合) 拡張自体を行わず、従来通りスクロールバー
+     フォールバックに任せる。 */
+  const WIDE_ENABLE_MIN_WIDTH_PX = 1300;
+  const siteBody = document.querySelector(".site-body");
+  const leftMenuZoneEl = document.querySelector(".left-menu-zone");
+  const rightMenuZoneEl = document.querySelector(".right-menu-zone");
+  function updateSideMenuWidth() {
+    if (!siteBody) return;
+    if (mobileMq.matches || window.innerWidth < WIDE_ENABLE_MIN_WIDTH_PX) {
+      siteBody.classList.remove("side-menus-wide");
+      return;
+    }
+    // 判定用に一旦 1カラム状態へ戻し、強制リフローしてから実測する
+    siteBody.classList.remove("side-menus-wide");
+    void siteBody.offsetHeight;
+    const overflowing = AppUtil.elementOverflows(leftMenuZoneEl) || AppUtil.elementOverflows(rightMenuZoneEl);
+    if (overflowing) siteBody.classList.add("side-menus-wide");
+  }
+  /* リサイズ中に何度も同期的に呼ぶと重いため rAF で1フレームにまとめる */
+  let sideMenuWidthRaf = null;
+  function scheduleSideMenuWidthUpdate() {
+    if (sideMenuWidthRaf !== null) return;
+    sideMenuWidthRaf = requestAnimationFrame(() => {
+      sideMenuWidthRaf = null;
+      updateSideMenuWidth();
+    });
+  }
+  window.addEventListener("resize", scheduleSideMenuWidthUpdate);
 
   $("show-content-toggle").addEventListener("change", () => {
     state.showContent = $("show-content-toggle").checked;

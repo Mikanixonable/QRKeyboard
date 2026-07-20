@@ -33,6 +33,10 @@
      ~100ms、通常の状態遷移は ~200ms を目安とする。 */
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --press-scale: 0.96;
+  /* 左右メニューゾーンの幅。左右対称を保つため両ゾーンともこの1変数を参照する。
+     app.js の updateSideMenuWidth() が縦のはみ出しを検知すると .site-body に
+     side-menus-wide を付与し、この変数自体を広い値に上書きする (下記参照)。 */
+  --side-menu-width: 200px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --bg: #3c4149; --surface: #3c4149; --surface-white: #484e57; --text: #eceef0; --text-sub: #9aa0a8; --border: #565c66; --accent: #f2954f; --accent-weak: #47331f; --accent2: #e08a3c; --accent2-weak: #3c2b18; --accent3: #d9731f; --accent3-weak: #362413; --danger: #e57368; --shadow-dark: #292d33; --shadow-light: #4c525c; }
@@ -147,16 +151,49 @@ body {
   max-width: 1000px;
   margin: 0 auto;
 }
+/* ---------- サイドメニュー幅の可変化 (デスクトップ限定) ----------
+   規格の選択肢や設定項目が増え、左右メニューが縦に収まらずスクロール
+   バーが出るケースが出てきたため、はみ出している場合だけ左右メニューを
+   広げて2列組みにし、縦幅を圧縮する。判定・付け外しは app.js の
+   updateSideMenuWidth() が行う (基準となる1カラム状態で scrollHeight を
+   測ってから切り替える。参照: 同関数のコメント)。
+   center-content-zone が窮屈にならないよう、site-body 自体の max-width も
+   合わせて広げる。 */
+.site-body.side-menus-wide {
+  --side-menu-width: 380px;
+  max-width: 1360px;
+}
 
 /* ---------- 左メニューゾーン ---------- */
 .left-menu-zone {
-  flex: 0 0 200px;
+  flex: 0 0 var(--side-menu-width);
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 12px 14px;
   border-right: 1px solid var(--border);
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-sub) 45%, transparent) transparent;
+}
+.left-menu-zone::-webkit-scrollbar { width: 6px; }
+.left-menu-zone::-webkit-scrollbar-track { background: transparent; }
+.left-menu-zone::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-sub) 45%, transparent);
+  border-radius: 3px;
+}
+/* 拡張状態では左メニューのタブカードを2列組みにして縦幅を詰める。
+   要素数が1個だけのグループ (PDF417・一次元バーコード) は半端に余白が
+   残って不格好になるため、その場合だけ全幅に戻す */
+.site-body.side-menus-wide .tab-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.site-body.side-menus-wide .tab-group > .tab:only-child {
+  grid-column: 1 / -1;
 }
 .site-title {
   display: flex;
@@ -248,6 +285,14 @@ body {
      単なるフェードではなく scale も同時に動かして「マテリアルの到着」にする */
   transform-origin: top center;
   animation: combo-materialize 220ms var(--ease-spring);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-sub) 45%, transparent) transparent;
+}
+.quick-combo-panel::-webkit-scrollbar { width: 6px; }
+.quick-combo-panel::-webkit-scrollbar-track { background: transparent; }
+.quick-combo-panel::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-sub) 45%, transparent);
+  border-radius: 3px;
 }
 #standard-combo .quick-combo-panel { transform-origin: top left; }
 #decode-combo .quick-combo-panel { transform-origin: top right; }
@@ -411,19 +456,43 @@ body {
 
 /* ---------- 右メニューゾーン ---------- */
 .right-menu-zone {
-  flex: 0 0 200px;
+  flex: 0 0 var(--side-menu-width);
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 12px 14px;
   border-left: 1px solid var(--border);
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-sub) 45%, transparent) transparent;
+}
+.right-menu-zone::-webkit-scrollbar { width: 6px; }
+.right-menu-zone::-webkit-scrollbar-track { background: transparent; }
+.right-menu-zone::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-sub) 45%, transparent);
+  border-radius: 3px;
 }
 /* モバイルのみタブで2枚に分ける (右メニューゾーンの縦幅節約用)。
    デスクトップでは display:contents で透過させ、従来通り .field が
    直接 .right-menu-zone の flex レイアウトに参加する */
 .right-menu-tabs { display: none; }
 .right-menu-panel { display: contents; }
+/* 拡張状態では右メニューの各設定項目 (.field) を2列組みにする。ただし
+   型番(複雑度)・分割方式・バーコード表示は選択肢が多く縦に長いため、
+   半分幅にすると窮屈になるので全幅のまま残す */
+.site-body.side-menus-wide .right-menu-zone {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  align-content: start;
+  gap: 10px 16px;
+}
+.site-body.side-menus-wide #version-field,
+.site-body.side-menus-wide #split-mode-field,
+.site-body.side-menus-wide #barcode-text-field {
+  grid-column: 1 / -1;
+}
 
 /* ---------- 中央コンテンツゾーン ---------- */
 .center-content-zone.layout.preview {
@@ -881,6 +950,19 @@ textarea:focus, select:focus, input:focus-visible,
     overflow-y: visible;
   }
   html, body { height: auto; min-height: 100dvh; overflow-y: auto; }
+
+  /* side-menus-wide はデスクトップ限定の状態のはずだが、リサイズ中に JS の
+     判定が追いつく前の一瞬だけこの幅で入り込む可能性があるため、念のため
+     モバイル側でも明示的に打ち消しておく (拡張幅・2列グリッド化を無効化) */
+  .site-body.side-menus-wide {
+    --side-menu-width: 200px;
+    max-width: none;
+  }
+  .site-body.side-menus-wide .tab-group,
+  .site-body.side-menus-wide .right-menu-zone {
+    display: flex;
+    grid-template-columns: none;
+  }
 
   /* タイトル横のロゴはモバイルでは横幅節約のため非表示にする */
   /* .site-title-icon { display: none; } */
