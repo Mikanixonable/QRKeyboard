@@ -975,6 +975,12 @@ textarea:focus, select:focus, input:focus-visible,
     flex: none;
     width: 100%;
     max-width: none;
+    /* overflow-x が hidden のままだと overflow-y: visible は仕様上 auto に
+       格上げされてしまい (どちらかが非 visible ならもう片方も非 visible 化
+       される)、規格選択・デコードの折りたたみパネルがこのゾーンの高さで
+       クリップされて QR 表示域の裏に隠れ選択不能になっていたため、
+       overflow-x も明示的に visible にする */
+    overflow-x: visible;
     overflow-y: visible;
   }
   .left-menu-zone {
